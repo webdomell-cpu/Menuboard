@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h1>CMS</h1>
+<div id="editor"></div>
+<button onclick="save()">Speichern</button>
+
+<script>
+let data = [];
+
+fetch("/api/menu").then(r=>r.json()).then(d=>{data=d;render();});
+
+function render(){
+  editor.innerHTML="";
+  data.forEach((item,i)=>{
+    editor.innerHTML+=`
+      <div>
+        <input value="${item.title}" onchange="update(${i},'title',this.value)">
+        <input value="${item.price}" onchange="update(${i},'price',this.value)">
+      </div>`;
+  });
+}
+
+function update(i,f,v){data[i][f]=v;}
+
+function save(){
+  fetch("/api/menu",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(data)
+  });
+}
+</script>
+</body>
+</html>

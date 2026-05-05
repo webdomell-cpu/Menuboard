@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { margin:0; width:1080px; height:1920px; overflow:hidden; background:#0e2f2b; color:#fff; font-family:sans-serif;}
+.page { position:absolute; width:100%; height:100%; top:0; left:0; transition:opacity 1s ease, transform 1s ease;}
+.hidden { opacity:0; transform:translateX(100px);}
+.visible { opacity:1; transform:translateX(0);}
+.grid { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(5,1fr); gap:15px; padding:20px;}
+.card { background:#123c36; border-radius:20px; padding:10px;}
+.price { color:#00ffcc; animation:pulse 3s infinite;}
+@keyframes pulse {0%{transform:scale(1);}50%{transform:scale(1.05);}100%{transform:scale(1);}}
+.big { height:40%; background:#123c36; border-radius:20px; padding:15px;}
+.smallGrid { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(3,1fr); gap:15px; height:60%;}
+</style>
+</head>
+<body>
+
+<div id="page1" class="page visible"></div>
+<div id="page2" class="page hidden"></div>
+
+<script>
+let socket;
+let data = [];
+
+function connect(){
+  socket = new WebSocket(location.origin.replace("http", "ws"));
+
+  socket.onmessage = (msg)=>{
+    data = JSON.parse(msg.data);
+    renderPage1();
+  };
+
+  socket.onclose = ()=>{
+    console.log("Reconnect...");
+    setTimeout(connect, 2000);
+  };
+}
+
+connect();
+
+function randomItems(count){
+  return [...data].sort(()=>0.5-Math.random()).slice(0,count);
+}
+
+function renderPage1(){
+  page1.innerHTML = "<div class='grid'>" + randomItems(10).map(i=>`
+    <div class='card'>
+      <h3>${i.title}</h3>
+      <p>${i.text}</p>
+      <div class='price'>${i.price}</div>
+    </div>`).join("") + "</div>";
+}
+
+function renderPage2(){
+  const highlight=randomItems(1)[0];
+  const others=randomItems(6);
+  page2.innerHTML=`
+    <div class='big'>
+      <h2>${highlight.title}</h2>
+      <p>${highlight.text}</p>
+      <div class='price'>${highlight.price}</div>
+    </div>
+    <div class='smallGrid'>
+      ${others.map(o=>`<div class='card'><h4>${o.title}</h4><div class='price'>${o.price}</div></div>`).join("")}
+    </div>`;
+}
+
+let current=1;
+
+function switchPage(){
+  if(current===1){
+    renderPage2();
+    page1.classList.replace("visible","hidden");
+    page2.classList.replace("hidden","visible");
+    current=2;
+  } else {
+    renderPage1();
+    page2.classList.replace("visible","hidden");
+    page1.classList.replace("hidden","visible");
+    current=1;
+  }
+}
+
+setInterval(switchPage,15000);
+</script>
+</body>
+</html>
