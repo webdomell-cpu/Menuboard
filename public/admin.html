@@ -1,1 +1,52 @@
-<html><body><h1>Admin placeholder</h1></body></html>
+</html><!-- ================= public/admin.html ================= --><!DOCTYPE html><html>
+<body>
+<h2>Artikel Verwaltung</h2>
+<select onchange="switchTab(this.value)">
+  <option value="0">Artikel 1-4</option>
+  <option value="4">Artikel 5-8</option>
+  <option value="8">Artikel 9-12</option>
+  <option value="12">Artikel 13-16</option>
+</select><div id="editor"></div>
+<button onclick="save()">Speichern</button><script>
+let data,settings,start=0;
+
+fetch('/api/menu').then(r=>r.json()).then(d=>{data=d.menuData;settings=d.settings;render();});
+
+function switchTab(s){start=parseInt(s);render();}
+
+function render(){
+  const el=document.getElementById('editor');
+  el.innerHTML='';
+
+  data.slice(start,start+4).forEach((item,i)=>{
+    const idx=start+i;
+    el.innerHTML+=`
+      <div>
+        <h3>Artikel ${idx+1}</h3>
+        <input value="${item.title}" onchange="update(${idx},'title',this.value)"><br>
+        <textarea onchange="update(${idx},'text',this.value)">${item.text}</textarea><br><input value="${item.price}" onchange="update(${idx},'price',this.value)"><br>
+
+    <label>Störer:</label>
+    <input type="checkbox" ${item.sticker?'checked':''} onchange="update(${idx},'sticker',this.checked)"><br>
+
+    <select onchange="update(${idx},'stickerType',this.value)">
+      <option value="circle">Kreis</option>
+      <option value="star">Stern</option>
+    </select><br>
+
+    <input type="color" value="${item.stickerColor}" onchange="update(${idx},'stickerColor',this.value)"><br>
+
+    <input type="file" onchange="upload(event,${idx})"><br>
+    <img src="${item.image}" width="100">
+  </div>
+`;
+
+}); }
+
+function update(i,f,v){data[i][f]=v;}
+
+function upload(e,i){ const reader=new FileReader(); reader.onload=ev=>{data[i].image=ev.target.result;render();}; reader.readAsDataURL(e.target.files[0]); }
+
+function save(){ fetch('/api/menu',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({menuData:data,settings})}); } </script>
+
+</body>
