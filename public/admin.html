@@ -1,27 +1,46 @@
 <!DOCTYPE html>
 <html>
 <body>
-<h1>CMS</h1>
+
+<h2>Menü bearbeiten</h2>
 <div id="editor"></div>
 <button onclick="save()">Speichern</button>
 
 <script>
-let data = [];
+let data=[];
 
-fetch("/api/menu").then(r=>r.json()).then(d=>{data=d;render();});
+fetch("/api/menu")
+.then(r=>r.json())
+.then(d=>{data=d;render();});
 
 function render(){
-  editor.innerHTML="";
+  const el=document.getElementById("editor");
+  el.innerHTML="";
+
   data.forEach((item,i)=>{
-    editor.innerHTML+=`
-      <div>
-        <input value="${item.title}" onchange="update(${i},'title',this.value)">
-        <input value="${item.price}" onchange="update(${i},'price',this.value)">
-      </div>`;
+    el.innerHTML+=`
+      <div style="margin:10px;padding:10px;border:1px solid #ccc;">
+        <input value="${item.title}" onchange="update(${i},'title',this.value)" placeholder="Titel (max 60 Zeichen)"><br>
+        <textarea onchange="update(${i},'text',this.value)" placeholder="Beschreibung (max 180 Zeichen)">${item.text}</textarea><br>
+        <input value="${item.price}" onchange="update(${i},'price',this.value)"><br>
+
+        <input type="file" onchange="upload(event,${i})"><br>
+        <img src="${item.image}" width="100">
+      </div>
+    `;
   });
 }
 
 function update(i,f,v){data[i][f]=v;}
+
+function upload(e,i){
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    data[i].image=ev.target.result;
+    render();
+  };
+  reader.readAsDataURL(e.target.files[0]);
+}
 
 function save(){
   fetch("/api/menu",{
@@ -31,5 +50,6 @@ function save(){
   });
 }
 </script>
+
 </body>
 </html>
