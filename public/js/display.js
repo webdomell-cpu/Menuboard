@@ -76,6 +76,237 @@ class MenuboardDisplay {
         }
     }
 
+
+    // ==================== FEATURE 1: TIME-BASED CONTENT (v7.50) ====================
+
+    async loadSchedule() {
+        try {
+            const res = await fetch('/schedule');
+            const data = await res.json();
+            if (data.success && data.activeSchedule) {
+                this.currentSchedule = data.activeSchedule;
+                // Apply schedule-specific settings
+                if (this.currentSchedule.theme) {
+                    this.settings.theme = this.currentSchedule.theme;
+                }
+                if (this.currentSchedule.tickerText) {
+                    this.ticker.text = this.currentSchedule.tickerText;
+                }
+            }
+        } catch (e) {
+            console.error('Schedule load error:', e);
+        }
+    }
+
+    getScheduleProducts() {
+        if (!this.currentSchedule || !this.currentSchedule.productIds) {
+            return this.products;
+        }
+        return this.products.filter(p => this.currentSchedule.productIds.includes(p.id));
+    }
+
+    getScheduleBadge() {
+        return this.currentSchedule?.badge || null;
+    }
+
+    // ==================== FEATURE 2: WEATHER INTEGRATION (v7.50) ====================
+
+    async loadWeather() {
+        try {
+            const weatherEnabled = this.settings?.weather?.enabled !== false;
+            if (!weatherEnabled) return;
+
+            const lat = this.settings?.weather?.latitude || '52.52';
+            const lon = this.settings?.weather?.longitude || '13.41';
+
+            const res = await fetch(`/weather?lat=${lat}&lon=${lon}`);
+            this.weather = await res.json();
+        } catch (e) {
+            console.error('Weather load error:', e);
+            this.weather = { success: false, icon: '☀️', text: 'Wetter nicht verfügbar', recommendation: '' };
+        }
+    }
+
+    renderWeatherWidget() {
+        if (!this.weather || this.settings?.weather?.showOnDisplay === false) return '';
+
+        const w = this.weather;
+        const temp = w.temperature !== null ? `${w.temperature}°C` : '';
+        const showRec = this.settings?.weather?.showRecommendations !== false;
+
+        return `
+            <div class="weather-widget ${w.success ? '' : 'weather-offline'}">
+                <div class="weather-main">
+                    <span class="weather-icon">${w.icon || '☀️'}</span>
+                    <span class="weather-temp">${temp}</span>
+                    <span class="weather-text">${w.text || ''}</span>
+                </div>
+                ${showRec && w.recommendation ? `
+                <div class="weather-recommendation">
+                    <i class="fas fa-lightbulb"></i> ${w.recommendation}
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    // ==================== FEATURE 3: QR CODES (v7.50) ====================
+
+    generateQRCode(text, size = 80) {
+        // Simple QR code using QRServer API (no library needed)
+        const encoded = encodeURIComponent(text);
+        return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;
+    }
+
+    renderProductQR(product) {
+        const qrEnabled = this.settings?.qrCodes?.enabled !== false;
+        const showOnProducts = this.settings?.qrCodes?.showOnProducts !== false;
+        if (!qrEnabled || !showOnProducts) return '';
+
+        const baseUrl = this.settings?.qrCodes?.baseUrl || window.location.origin;
+        const qrText = `${baseUrl}/order?product=${product.id}`;
+        const qrUrl = this.generateQRCode(qrText, 60);
+
+        return `
+            <div class="product-qr">
+                <img src="${qrUrl}" alt="QR Code" loading="lazy">
+                <span>Scan für Bestellung</span>
+            </div>
+        `;
+    }
+
+    renderDisplayQR() {
+        const qrEnabled = this.settings?.qrCodes?.enabled !== false;
+        const showOnDisplay = this.settings?.qrCodes?.showOnDisplay !== false;
+        if (!qrEnabled || !showOnDisplay) return '';
+
+        const currentUrl = window.location.href;
+        const qrUrl = this.generateQRCode(currentUrl, 100);
+
+        return `
+            <div class="display-qr">
+                <img src="${qrUrl}" alt="Display QR" loading="lazy">
+                <span>Scan für Menü</span>
+            </div>
+        `;
+    }
+
+    // ==================== FEATURE 4: MULTILINGUAL (v7.50) ====================
+
+    async loadTranslations() {
+        // Built-in translations for common terms
+        this.translations = {
+            de: {
+                menu: 'Menü',
+                price: 'Preis',
+                soldOut: 'Ausverkauft',
+                lowStock: 'Wenig verfügbar',
+                bestseller: 'Bestseller',
+                new: 'Neu',
+                offer: 'Angebot',
+                limited: 'Limitiert',
+                scanToOrder: 'Scan für Bestellung',
+                weather: 'Wetter',
+                currentOffer: 'Aktuelles Angebot'
+            },
+            en: {
+                menu: 'Menu',
+                price: 'Price',
+                soldOut: 'Sold Out',
+                lowStock: 'Low Stock',
+                bestseller: 'Bestseller',
+                new: 'New',
+                offer: 'Offer',
+                limited: 'Limited',
+                scanToOrder: 'Scan to Order',
+                weather: 'Weather',
+                currentOffer: 'Current Offer'
+            },
+            ar: {
+                menu: 'قائمة الطعام',
+                price: 'السعر',
+                soldOut: 'نفذت الكمية',
+                lowStock: 'كمية محدودة',
+                bestseller: 'الأكثر مبيعاً',
+                new: 'جديد',
+                offer: 'عرض',
+                limited: 'محدود',
+                scanToOrder: 'امسح للطلب',
+                weather: 'الطقس',
+                currentOffer: 'العرض الحالي'
+            }
+        };
+
+        // Detect language from settings or browser
+        const enabled = this.settings?.languages?.enabled || ['de'];
+        const defaultLang = this.settings?.languages?.default || 'de';
+        this.currentLanguage = enabled.includes(defaultLang) ? defaultLang : enabled[0];
+    }
+
+    t(key) {
+        const lang = this.translations[this.currentLanguage] || this.translations['de'];
+        return lang[key] || key;
+    }
+
+    renderLanguageSelector() {
+        const enabled = this.settings?.languages?.enabled || ['de'];
+        const showSelector = this.settings?.languages?.showSelector !== false;
+
+        if (!showSelector || enabled.length < 2) return '';
+
+        const flags = { de: '🇩🇪', en: '🇬🇧', ar: '🇸🇦' };
+
+        return `
+            <div class="language-selector">
+                ${enabled.map(lang => `
+                    <button class="lang-btn ${lang === this.currentLanguage ? 'active' : ''}" 
+                            onclick="window.menuboard.setLanguage('${lang}')">
+                        ${flags[lang] || lang} ${lang.toUpperCase()}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    setLanguage(lang) {
+        this.currentLanguage = lang;
+        this.render();
+    }
+
+    // ==================== FEATURE 5: ANIMATIONS (v7.50) ====================
+
+    getAnimationClasses() {
+        const anims = this.settings?.animations || {};
+        if (!anims.enabled) return {};
+
+        return {
+            pageTransition: anims.pageTransition || 'slide',
+            productFadeIn: anims.productFadeIn !== false,
+            offerPulse: anims.offerPulse !== false,
+            duration: anims.transitionDuration || 500
+        };
+    }
+
+    animateProductEntry(element, index) {
+        const anims = this.getAnimationClasses();
+        if (!anims.productFadeIn) return;
+
+        element.style.opacity = '0';
+        element.style.transform = 'translateY(20px)';
+        element.style.transition = `all ${anims.duration}ms ease ${index * 100}ms`;
+
+        requestAnimationFrame(() => {
+            element.style.opacity = '1';
+            element.style.transform = 'translateY(0)';
+        });
+    }
+
+    animateOffer(element) {
+        const anims = this.getAnimationClasses();
+        if (!anims.offerPulse) return;
+
+        element.classList.add('pulse-animation');
+    }
     applyTheme() {
         const theme = this.settings.theme || 'dark';
         // Remove all theme classes first
