@@ -103,7 +103,7 @@ function getDefaultData() {
     ];
 
     return {
-        version: "7.40",
+        version: "7.50",
         lastModified: new Date().toISOString(),
         settings: {
             theme: "dark",
@@ -158,7 +158,34 @@ function getDefaultData() {
             { id: "display-main", name: "Hauptdisplay", slug: "main", description: "Hauptdisplay an der Theke", templateId: "split", playlist: [], active: true, createdAt: new Date().toISOString(), lastSeen: new Date().toISOString() },
             { id: "display-outdoor", name: "Außendisplay", slug: "outdoor", description: "Display am Eingang", templateId: "promo-focus", playlist: [], active: true, createdAt: new Date().toISOString(), lastSeen: new Date().toISOString() },
             { id: "display-kitchen", name: "Küchendisplay", slug: "kitchen", description: "Display in der Küche", templateId: "fullscreen-menu", playlist: [], active: true, createdAt: new Date().toISOString(), lastSeen: new Date().toISOString() }
-        ]
+        ],
+        schedules: getDefaultSchedules(),
+        weather: {
+            enabled: true,
+            latitude: '52.52',
+            longitude: '13.41',
+            showOnDisplay: true,
+            showRecommendations: true,
+            updateInterval: 300000 // 5 minutes
+        },
+        qrCodes: {
+            enabled: true,
+            baseUrl: '',
+            showOnProducts: true,
+            showOnDisplay: true
+        },
+        languages: {
+            enabled: ['de', 'en'],
+            default: 'de',
+            showSelector: true
+        },
+        animations: {
+            enabled: true,
+            pageTransition: 'slide',
+            productFadeIn: true,
+            offerPulse: true,
+            transitionDuration: 500
+        }
     };
 }
 
@@ -658,7 +685,7 @@ app.delete('/templates/:id', (req, res) => {
 
 // Health Check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', version: '7.40', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', version: '7.50', timestamp: new Date().toISOString() });
 });
 
 // Redirect root to admin
@@ -675,7 +702,7 @@ app.use((err, req, res, next) => {
 // Start Server
 app.listen(PORT, () => {
     console.log('╔══════════════════════════════════════════╗');
-    console.log('║     DIGITAL MENUBOARD v7.40              ║');
+    console.log('║     DIGITAL MENUBOARD v7.50              ║');
     console.log('║     Server läuft auf Port ' + PORT + '            ║');
     console.log('╠══════════════════════════════════════════╣');
     console.log('║  Admin UI:  http://localhost:' + PORT + '/admin   ║');

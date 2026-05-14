@@ -1,7 +1,7 @@
 {
   "name": "digital-menuboard",
-  "version": "7.40",
-  "description": "Digital Menuboard System with Templates CRUD, Multi-Display Support, 12 Fonts, Themes",
+  "version": "7.50",
+  "description": "Digital Menuboard System v7.50 - with Time-based Content, Weather, QR Codes, Multilingual, Animations",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +10,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
