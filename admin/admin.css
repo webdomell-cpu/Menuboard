@@ -1816,6 +1816,273 @@ body {
     margin-top: 2px;
 }
 
+
+/* ═══════════════════ FEATURE 1: SCHEDULE ADMIN (v7.50) ═══════════════════ */
+
+.schedules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+}
+
+.schedule-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    transition: all var(--transition-normal);
+}
+
+.schedule-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow-md);
+}
+
+.schedule-active {
+    border-left: 3px solid var(--success);
+}
+
+.schedule-inactive {
+    opacity: 0.6;
+    border-left: 3px solid var(--text-muted);
+}
+
+.schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.schedule-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.schedule-badge {
+    background: var(--accent-gradient);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.schedule-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.schedule-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.schedule-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.schedule-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.schedule-actions .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 6px;
+    font-size: 12px;
+}
+
+.schedule-day-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.schedule-day-check {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-primary);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.schedule-day-check:hover {
+    border-color: var(--accent-primary);
+}
+
+.schedule-day-check input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+}
+
+/* ═══════════════════ FEATURE 2-5: SETTINGS CARDS (v7.50) ═══════════════════ */
+
+.settings-card h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 16px 0 10px;
+    color: var(--text-accent);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.settings-card h4:first-child {
+    margin-top: 0;
+}
+
+.language-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.checkbox-label:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+.checkbox-label input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    width: 16px;
+    height: 16px;
+}
+
+/* ═══════════════════ QR CODE PREVIEW (v7.50) ═══════════════════ */
+
+.qr-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background: white;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.qr-preview img {
+    width: 120px;
+    height: 120px;
+}
+
+.qr-preview span {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ═══════════════════ ANIMATION PREVIEW (v7.50) ═══════════════════ */
+
+.animation-preview {
+    height: 60px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.anim-demo-box {
+    width: 30px;
+    height: 30px;
+    background: var(--accent-gradient);
+    border-radius: var(--radius-sm);
+}
+
+.anim-demo-slide {
+    animation: demoSlide 1.5s infinite;
+}
+
+.anim-demo-fade {
+    animation: demoFade 1.5s infinite;
+}
+
+.anim-demo-scale {
+    animation: demoScale 1.5s infinite;
+}
+
+@keyframes demoSlide {
+    0%, 100% { transform: translateX(-20px); }
+    50% { transform: translateX(20px); }
+}
+
+@keyframes demoFade {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+}
+
+@keyframes demoScale {
+    0%, 100% { transform: scale(0.7); }
+    50% { transform: scale(1.1); }
+}
+
+/* ═══════════════════ WEATHER WIDGET PREVIEW (v7.50) ═══════════════════ */
+
+.weather-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-top: 8px;
+}
+
+.weather-preview-icon {
+    font-size: 32px;
+}
+
+.weather-preview-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.weather-preview-temp {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.weather-preview-text {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.weather-preview-rec {
+    font-size: 11px;
+    color: var(--accent-gold);
+}
+
 /* ═══════════════════ RESPONSIVE ═══════════════════ */
 @media (max-width: 1024px) {
     .dashboard-grid { grid-template-columns: repeat(2, 1fr); }

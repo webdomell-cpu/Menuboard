@@ -1782,6 +1782,319 @@ class MenuboardAdmin {
         const versionEl = document.getElementById('dash-version');
         if (versionEl) versionEl.textContent = this.data?.version || '7.40';
     }
+
+    // ==================== FEATURE ADMIN UI (v7.50) ====================
+
+    // --- 1. TIME-BASED CONTENT ADMIN ---
+
+    async loadSchedules() {
+        try {
+            const res = await fetch('/schedule');
+            const data = await res.json();
+            this.schedules = data.allSchedules || [];
+            this.renderSchedules();
+        } catch (e) {
+            console.error('Schedule load error:', e);
+        }
+    }
+
+    renderSchedules() {
+        const container = document.getElementById('schedulesList');
+        if (!container) return;
+
+        container.innerHTML = this.schedules.map(s => {
+            const days = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+            const activeDays = s.days?.map(d => days[d]).join(', ') || 'Alle';
+            const isActive = s.active !== false;
+
+            return `
+            <div class="schedule-card ${isActive ? 'schedule-active' : 'schedule-inactive'}">
+                <div class="schedule-header">
+                    <h4>${s.name}</h4>
+                    <span class="schedule-badge">${s.badge || 'Plan'}</span>
+                </div>
+                <p class="schedule-desc">${s.description || ''}</p>
+                <div class="schedule-meta">
+                    <span><i class="fas fa-clock"></i> ${s.startTime} - ${s.endTime}</span>
+                    <span><i class="fas fa-calendar"></i> ${activeDays}</span>
+                    <span><i class="fas fa-layer-group"></i> ${s.templateId || 'Standard'}</span>
+                </div>
+                <div class="schedule-actions">
+                    <button class="btn btn-outline btn-sm" onclick="admin.editSchedule('${s.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="admin.toggleSchedule('${s.id}')">
+                        <i class="fas fa-${isActive ? 'pause' : 'play'}"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="admin.deleteSchedule('${s.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `}).join('');
+    }
+
+    openScheduleModal(schedule = null) {
+        const modal = document.getElementById('scheduleModal');
+        const title = document.getElementById('scheduleModalTitle');
+
+        this.editingSchedule = schedule;
+
+        if (schedule) {
+            title.textContent = 'Zeitplan bearbeiten';
+            document.getElementById('scheduleId').value = schedule.id;
+            document.getElementById('scheduleName').value = schedule.name;
+            document.getElementById('scheduleDescription').value = schedule.description || '';
+            document.getElementById('scheduleStart').value = schedule.startTime || '06:00';
+            document.getElementById('scheduleEnd').value = schedule.endTime || '11:00';
+            document.getElementById('scheduleTemplate').value = schedule.templateId || 'split';
+            document.getElementById('scheduleTicker').value = schedule.tickerText || '';
+            document.getElementById('scheduleTheme').value = schedule.theme || 'dark';
+            document.getElementById('scheduleBadge').value = schedule.badge || '';
+
+            // Check days
+            const dayCheckboxes = document.querySelectorAll('.schedule-day-check');
+            dayCheckboxes.forEach(cb => {
+                cb.checked = schedule.days?.includes(parseInt(cb.value)) || false;
+            });
+        } else {
+            title.textContent = 'Neuer Zeitplan';
+            document.getElementById('scheduleForm').reset();
+            document.getElementById('scheduleId').value = '';
+            document.getElementById('scheduleStart').value = '06:00';
+            document.getElementById('scheduleEnd').value = '11:00';
+        }
+
+        modal.classList.add('active');
+    }
+
+    async saveSchedule() {
+        const id = document.getElementById('scheduleId').value;
+        const dayCheckboxes = document.querySelectorAll('.schedule-day-check:checked');
+        const days = Array.from(dayCheckboxes).map(cb => parseInt(cb.value));
+
+        const schedule = {
+            id: id || 'schedule-' + Date.now(),
+            name: document.getElementById('scheduleName').value,
+            description: document.getElementById('scheduleDescription').value,
+            startTime: document.getElementById('scheduleStart').value,
+            endTime: document.getElementById('scheduleEnd').value,
+            days: days.length > 0 ? days : [0,1,2,3,4,5,6],
+            templateId: document.getElementById('scheduleTemplate').value,
+            tickerText: document.getElementById('scheduleTicker').value,
+            theme: document.getElementById('scheduleTheme').value,
+            badge: document.getElementById('scheduleBadge').value,
+            active: true
+        };
+
+        try {
+            const res = await fetch('/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ schedules: this.schedules.map(s => s.id === (id || schedule.id) ? schedule : s) })
+            });
+            const result = await res.json();
+            if (result.success) {
+                this.schedules = result.schedules;
+                this.renderSchedules();
+                this.showToast('Zeitplan gespeichert!', 'success');
+                this.closeAllModals();
+            }
+        } catch (e) {
+            this.showToast('Fehler beim Speichern', 'error');
+        }
+    }
+
+    async toggleSchedule(id) {
+        const schedule = this.schedules.find(s => s.id === id);
+        if (!schedule) return;
+        schedule.active = !schedule.active;
+        await this.saveAllSchedules();
+    }
+
+    async deleteSchedule(id) {
+        if (!confirm('Zeitplan wirklich löschen?')) return;
+        this.schedules = this.schedules.filter(s => s.id !== id);
+        await this.saveAllSchedules();
+    }
+
+    async saveAllSchedules() {
+        try {
+            const res = await fetch('/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ schedules: this.schedules })
+            });
+            const result = await res.json();
+            if (result.success) {
+                this.schedules = result.schedules;
+                this.renderSchedules();
+                this.showToast('Zeitpläne aktualisiert!', 'success');
+            }
+        } catch (e) {
+            this.showToast('Fehler', 'error');
+        }
+    }
+
+    // --- 2. WEATHER SETTINGS ---
+
+    renderWeatherSettings() {
+        const weather = this.data?.weather || {};
+        const container = document.getElementById('weatherSettings');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="setting-row">
+                <label>Wetter anzeigen</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="weatherEnabled" ${weather.enabled !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Breitengrad</label>
+                    <input type="text" id="weatherLat" value="${weather.latitude || '52.52'}">
+                </div>
+                <div class="form-group">
+                    <label>Längengrad</label>
+                    <input type="text" id="weatherLon" value="${weather.longitude || '13.41'}">
+                </div>
+            </div>
+            <div class="setting-row">
+                <label>Empfehlungen anzeigen</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="weatherRecommendations" ${weather.showRecommendations !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        `;
+    }
+
+    // --- 3. QR CODE SETTINGS ---
+
+    renderQRSettings() {
+        const qr = this.data?.qrCodes || {};
+        const container = document.getElementById('qrSettings');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="setting-row">
+                <label>QR-Codes aktiv</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="qrEnabled" ${qr.enabled !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Basis-URL</label>
+                <input type="text" id="qrBaseUrl" value="${qr.baseUrl || ''}" placeholder="https://dein-shop.com">
+            </div>
+            <div class="setting-row">
+                <label>Auf Produkten</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="qrOnProducts" ${qr.showOnProducts !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-row">
+                <label>Auf Display</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="qrOnDisplay" ${qr.showOnDisplay !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        `;
+    }
+
+    // --- 4. LANGUAGE SETTINGS ---
+
+    renderLanguageSettings() {
+        const langs = this.data?.languages || {};
+        const container = document.getElementById('languageSettings');
+        if (!container) return;
+
+        const enabled = langs.enabled || ['de'];
+        const allLangs = [
+            { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+            { code: 'en', name: 'English', flag: '🇬🇧' },
+            { code: 'ar', name: 'العربية', flag: '🇸🇦' }
+        ];
+
+        container.innerHTML = `
+            <div class="setting-row">
+                <label>Sprachauswahl anzeigen</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="langSelector" ${langs.showSelector !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Aktive Sprachen</label>
+                <div class="language-checkboxes">
+                    ${allLangs.map(l => `
+                        <label class="checkbox-label">
+                            <input type="checkbox" class="lang-check" value="${l.code}" ${enabled.includes(l.code) ? 'checked' : ''}>
+                            <span>${l.flag} ${l.name}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Standardsprache</label>
+                <select id="defaultLang">
+                    ${allLangs.filter(l => enabled.includes(l.code)).map(l => `
+                        <option value="${l.code}" ${langs.default === l.code ? 'selected' : ''}>${l.flag} ${l.name}</option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }
+
+    // --- 5. ANIMATION SETTINGS ---
+
+    renderAnimationSettings() {
+        const anims = this.data?.animations || {};
+        const container = document.getElementById('animationSettings');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="setting-row">
+                <label>Animationen aktiv</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="animEnabled" ${anims.enabled !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Seitenübergang</label>
+                <select id="animTransition">
+                    <option value="slide" ${anims.pageTransition === 'slide' ? 'selected' : ''}>Slide</option>
+                    <option value="fade" ${anims.pageTransition === 'fade' ? 'selected' : ''}>Fade</option>
+                    <option value="scale" ${anims.pageTransition === 'scale' ? 'selected' : ''}>Scale</option>
+                    <option value="none" ${anims.pageTransition === 'none' ? 'selected' : ''}>Keine</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <label>Produkte Fade-In</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="animFadeIn" ${anims.productFadeIn !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-row">
+                <label>Angebote Pulse</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="animPulse" ${anims.offerPulse !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Übergangsdauer (ms)</label>
+                <input type="number" id="animDuration" value="${anims.transitionDuration || 500}" min="100" max="2000" step="100">
+            </div>
+        `;
+    }
     formatBytes(bytes) {
         if (bytes === 0) return '0 B';
         const k = 1024;
