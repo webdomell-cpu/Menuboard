@@ -683,6 +683,171 @@ app.delete('/templates/:id', (req, res) => {
     }
 });
 
+// ═══════════════════ SCHEDULES (Zeitgesteuerte Inhalte) ═══════════════════
+
+function getDefaultSchedules() {
+    return [
+        {
+            id: 'schedule-breakfast',
+            name: 'Frühstück',
+            description: 'Frühstücksmenü am Morgen',
+            startTime: '06:00',
+            endTime: '11:00',
+            days: [0, 1, 2, 3, 4, 5, 6], // alle Tage
+            templateId: 'split',
+            tickerText: '☀️ Guten Morgen! Unser Frühstück wartet auf Sie!',
+            theme: 'light',
+            badge: 'Frühstück',
+            active: true
+        },
+        {
+            id: 'schedule-lunch',
+            name: 'Mittagessen',
+            description: 'Mittagsangebot Mo-Fr',
+            startTime: '11:00',
+            endTime: '14:00',
+            days: [1, 2, 3, 4, 5], // Mo-Fr
+            templateId: 'split',
+            tickerText: '🍽️ Mittagsmenü: Täglich wechselnde Angebote!',
+            theme: 'dark',
+            badge: 'Mittagsmenü',
+            active: true
+        },
+        {
+            id: 'schedule-dinner',
+            name: 'Abendessen',
+            description: 'Abendmenü für alle',
+            startTime: '14:00',
+            endTime: '22:00',
+            days: [0, 1, 2, 3, 4, 5, 6],
+            templateId: 'split',
+            tickerText: '🌙 Abendspecials – Genießen Sie unsere Abendkarte!',
+            theme: 'dark',
+            badge: 'Abendmenü',
+            active: true
+        },
+        {
+            id: 'schedule-burger-day',
+            name: 'Burger Day',
+            description: 'Montag: Burger Day 11-22 Uhr',
+            startTime: '11:00',
+            endTime: '22:00',
+            days: [1], // nur Montag
+            templateId: 'fullscreen-menu',
+            tickerText: '🍔 MONTAG = BURGER DAY! Alle Burger 20% günstiger!',
+            theme: 'burger',
+            badge: 'Burger Day',
+            active: true
+        },
+        {
+            id: 'schedule-weekend',
+            name: 'Wochenend-Special',
+            description: 'Sonderangebote am Wochenende',
+            startTime: '10:00',
+            endTime: '22:00',
+            days: [0, 6], // Sa + So
+            templateId: 'promo-focus',
+            tickerText: '🎉 WOCHENEND-SPECIAL! Heute besonders günstig!',
+            theme: 'dark',
+            badge: 'Weekend',
+            active: true
+        }
+    ];
+}
+
+// GET /schedule - Aktiver Zeitplan + alle Zeitpläne
+app.get('/schedule', (req, res) => {
+    const data = loadData();
+    const schedules = data.schedules || [];
+
+    const now = new Date();
+    const currentDay = now.getDay(); // 0=So, 1=Mo, ...
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+
+    const activeSchedule = schedules.find(s => {
+        if (!s.active) return false;
+        if (!s.days || !s.days.includes(currentDay)) return false;
+        const [startH, startM] = (s.startTime || '00:00').split(':').map(Number);
+        const [endH, endM] = (s.endTime || '23:59').split(':').map(Number);
+        const startMin = startH * 60 + startM;
+        const endMin = endH * 60 + endM;
+        return currentTime >= startMin && currentTime < endMin;
+    });
+
+    res.json({
+        activeSchedule: activeSchedule || null,
+        allSchedules: schedules,
+        currentTime: now.toISOString()
+    });
+});
+
+// POST /schedules - Zeitpläne speichern
+app.post('/schedules', (req, res) => {
+    const data = loadData();
+    data.schedules = req.body.schedules || [];
+    data.lastModified = new Date().toISOString();
+    if (saveData(data)) {
+        res.json({ success: true, schedules: data.schedules });
+    } else {
+        res.status(500).json({ success: false });
+    }
+});
+
+// ═══════════════════ WEATHER (Wetter-Integration) ═══════════════════
+
+// GET /weather - Aktuelles Wetter via Open-Meteo
+app.get('/weather', async (req, res) => {
+    try {
+        const lat = req.query.lat || '52.52';
+        const lon = req.query.lon || '13.41';
+
+        // Dynamically import node-fetch (ESM)
+        const { default: fetch } = await import('node-fetch');
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&windspeed_unit=kmh`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Weather API nicht erreichbar');
+
+        const weatherData = await response.json();
+        const current = weatherData.current_weather;
+
+        // WMO Wetter-Codes → Icons
+        const weatherIcons = {
+            0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+            45: '🌫️', 48: '🌫️',
+            51: '🌦️', 53: '🌦️', 55: '🌧️',
+            61: '🌧️', 63: '🌧️', 65: '🌧️',
+            71: '❄️', 73: '❄️', 75: '❄️',
+            77: '🌨️', 80: '🌦️', 81: '🌦️', 82: '⛈️',
+            85: '🌨️', 86: '🌨️',
+            95: '⛈️', 96: '⛈️', 99: '⛈️'
+        };
+
+        // Wettercode → Empfehlung
+        const code = current.weathercode;
+        let recommendation = null;
+        if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) {
+            recommendation = '🍲 Heißes perfekt bei Regenwetter!';
+        } else if (code === 0 || code === 1) {
+            recommendation = '🧊 Perfekt für Eistee & Erfrischungen!';
+        } else if ([71, 73, 75, 77, 85, 86].includes(code)) {
+            recommendation = '☕ Wärm dich mit heißen Getränken!';
+        }
+
+        res.json({
+            temperature: current.temperature,
+            windspeed: current.windspeed,
+            weathercode: code,
+            icon: weatherIcons[code] || '🌡️',
+            recommendation,
+            time: current.time
+        });
+    } catch (e) {
+        console.error('Wetter-Fehler:', e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Health Check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', version: '7.50', timestamp: new Date().toISOString() });

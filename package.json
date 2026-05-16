@@ -1,6 +1,6 @@
 {
   "name": "digital-menuboard",
-  "version": "7.50",
+  "version": "7.60",
   "description": "Digital Menuboard System v7.50 - with Time-based Content, Weather, QR Codes, Multilingual, Animations",
   "main": "server.js",
   "scripts": {
