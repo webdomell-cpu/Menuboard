@@ -157,7 +157,10 @@ class MenuboardAdmin {
             zones: 'Zonen',
             designer: 'Designer',
             templates: 'Templates',
+            displays: 'Displays',
             media: 'Mediathek',
+            schedules: 'Zeitpläne',
+            features: 'Features',
             settings: 'Einstellungen'
         };
         document.getElementById('pageTitle').textContent = titles[tab] || tab;
@@ -166,6 +169,13 @@ class MenuboardAdmin {
             setTimeout(() => this.renderDesigner(), 50);
         } else if (tab === 'media') {
             this.loadMedia();
+        } else if (tab === 'schedules') {
+            this.loadSchedules();
+        } else if (tab === 'features') {
+            this.renderWeatherSettings();
+            this.renderQRSettings();
+            this.renderLanguageSettings();
+            this.renderAnimationSettings();
         }
     }
 
@@ -241,6 +251,13 @@ class MenuboardAdmin {
         document.getElementById('settingTickerSpeed').addEventListener('input', (e) => {
             e.target.nextElementSibling.textContent = e.target.value;
         });
+
+        // Schedules
+        document.getElementById('addScheduleBtn').addEventListener('click', () => this.openScheduleModal());
+        document.getElementById('saveScheduleBtn').addEventListener('click', () => this.saveSchedule());
+
+        // Features
+        document.getElementById('saveFeaturesBtn').addEventListener('click', () => this.saveFeatures());
 
         // Modal close
         document.querySelectorAll('.modal-close, .modal-cancel, .modal-overlay').forEach(el => {
@@ -2095,6 +2112,66 @@ class MenuboardAdmin {
             </div>
         `;
     }
+    async testWeather() {
+        const lat = document.getElementById('weatherLat')?.value || '52.52';
+        const lon = document.getElementById('weatherLon')?.value || '13.41';
+        const result = document.getElementById('weatherTestResult');
+        if (result) result.textContent = '⏳ Lädt Wetterdaten...';
+        try {
+            const res = await fetch(`/weather?lat=${lat}&lon=${lon}`);
+            if (!res.ok) throw new Error('Wetter-API nicht erreichbar');
+            const w = await res.json();
+            if (result) result.textContent = `${w.icon} ${w.temperature}°C | 💨 ${w.windspeed} km/h${w.recommendation ? ' | ' + w.recommendation : ''}`;
+        } catch (e) {
+            if (result) result.textContent = '❌ Fehler: ' + e.message;
+        }
+    }
+
+    async saveFeatures() {
+        // Weather
+        const weather = {
+            enabled: document.getElementById('weatherEnabled')?.checked !== false,
+            latitude: document.getElementById('weatherLat')?.value || '52.52',
+            longitude: document.getElementById('weatherLon')?.value || '13.41',
+            showOnDisplay: true,
+            showRecommendations: document.getElementById('weatherRecommendations')?.checked !== false,
+            updateInterval: 300000
+        };
+
+        // QR
+        const qrCodes = {
+            enabled: document.getElementById('qrEnabled')?.checked !== false,
+            baseUrl: document.getElementById('qrBaseUrl')?.value || '',
+            showOnProducts: document.getElementById('qrOnProducts')?.checked !== false,
+            showOnDisplay: document.getElementById('qrOnDisplay')?.checked !== false
+        };
+
+        // Languages
+        const langChecks = document.querySelectorAll('.lang-check:checked');
+        const languages = {
+            enabled: Array.from(langChecks).map(cb => cb.value),
+            default: document.getElementById('defaultLang')?.value || 'de',
+            showSelector: document.getElementById('langSelector')?.checked !== false
+        };
+
+        // Animations
+        const animations = {
+            enabled: document.getElementById('animEnabled')?.checked !== false,
+            pageTransition: document.getElementById('animTransition')?.value || 'slide',
+            productFadeIn: document.getElementById('animFadeIn')?.checked !== false,
+            offerPulse: document.getElementById('animPulse')?.checked !== false,
+            transitionDuration: parseInt(document.getElementById('animDuration')?.value || '500')
+        };
+
+        this.data.weather = weather;
+        this.data.qrCodes = qrCodes;
+        this.data.languages = languages;
+        this.data.animations = animations;
+
+        await this.saveData();
+        this.showToast('Features gespeichert!', 'success');
+    }
+
     formatBytes(bytes) {
         if (bytes === 0) return '0 B';
         const k = 1024;

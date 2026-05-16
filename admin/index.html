@@ -52,6 +52,14 @@
                     <i class="fas fa-images"></i> Mediathek
                     <span class="nav-badge" id="media-count">0</span>
                 </a>
+                <a href="#" class="nav-item" data-tab="schedules">
+                    <i class="fas fa-clock"></i>
+                    <span>Zeitpläne</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="features">
+                    <i class="fas fa-star"></i>
+                    <span>Features</span>
+                </a>
                 <a href="#" class="nav-item" data-tab="settings">
                     <i class="fas fa-cog"></i> Einstellungen
                 </a>
@@ -364,6 +372,68 @@
                 </div>
 
                 <!-- SETTINGS -->
+                <!-- ═══ SCHEDULES TAB ═══ -->
+                <div class="tab-content" id="tab-schedules">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Zeitpläne</h2>
+                            <p>Zeitgesteuerte Inhalte & Tagesmenüs</p>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-primary" id="addScheduleBtn">
+                                <i class="fas fa-plus"></i> Zeitplan hinzufügen
+                            </button>
+                        </div>
+                    </div>
+                    <div class="schedules-list" id="schedulesList">
+                        <div style="text-align:center;padding:40px;color:var(--text-muted);">
+                            <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
+                            <p>Zeitpläne werden geladen...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ FEATURES TAB ═══ -->
+                <div class="tab-content" id="tab-features">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Features</h2>
+                            <p>Wetter, QR-Codes, Sprachen & Animationen</p>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-primary" id="saveFeaturesBtn">
+                                <i class="fas fa-save"></i> Speichern
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-grid">
+                        <!-- Wetter -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-cloud-sun"></i> Wetter-Integration</h3>
+                            <div id="weatherSettings">Lädt...</div>
+                            <button class="btn btn-outline btn-sm" style="margin-top:12px;" onclick="admin.testWeather()">
+                                <i class="fas fa-vial"></i> Wetter testen
+                            </button>
+                            <div id="weatherTestResult" style="margin-top:8px;font-size:13px;color:var(--text-muted);"></div>
+                        </div>
+                        <!-- QR Codes -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-qrcode"></i> QR-Codes</h3>
+                            <div id="qrSettings">Lädt...</div>
+                        </div>
+                        <!-- Sprachen -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-language"></i> Mehrsprachigkeit</h3>
+                            <div id="languageSettings">Lädt...</div>
+                        </div>
+                        <!-- Animationen -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-magic"></i> Animationen</h3>
+                            <div id="animationSettings">Lädt...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="tab-content" id="tab-settings">
                     <div class="section-header">
                         <div class="section-title">
@@ -851,6 +921,87 @@
             <div class="modal-footer">
                 <button class="btn btn-outline modal-cancel">Abbrechen</button>
                 <button class="btn btn-primary" id="saveDisplayBtn">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCHEDULE MODAL -->
+    <div class="modal" id="scheduleModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="scheduleModalTitle">Neuer Zeitplan</h3>
+                <button class="modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <input type="hidden" id="scheduleId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="scheduleName" placeholder="z.B. Frühstück" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Badge</label>
+                            <input type="text" id="scheduleBadge" placeholder="z.B. Morgens">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Beschreibung</label>
+                        <input type="text" id="scheduleDescription" placeholder="Kurze Beschreibung...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Startzeit</label>
+                            <input type="time" id="scheduleStart" value="06:00">
+                        </div>
+                        <div class="form-group">
+                            <label>Endzeit</label>
+                            <input type="time" id="scheduleEnd" value="11:00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Wochentage</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="0"> So</label>
+                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="1" checked> Mo</label>
+                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="2" checked> Di</label>
+                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="3" checked> Mi</label>
+                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="4" checked> Do</label>
+                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="5" checked> Fr</label>
+                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="6"> Sa</label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Template</label>
+                            <select id="scheduleTemplate">
+                                <option value="split">Split Screen</option>
+                                <option value="fullscreen-menu">Full Screen Menü</option>
+                                <option value="menu-video">Menü + Video</option>
+                                <option value="triple">Triple Column</option>
+                                <option value="promo-focus">Promo Fokus</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Theme</label>
+                            <select id="scheduleTheme">
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                                <option value="burger">Burger</option>
+                                <option value="coffee">Coffee</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Ticker Text</label>
+                        <textarea id="scheduleTicker" rows="2" placeholder="Ticker-Text für diesen Zeitplan..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline modal-cancel">Abbrechen</button>
+                <button class="btn btn-primary" id="saveScheduleBtn">Speichern</button>
             </div>
         </div>
     </div>
