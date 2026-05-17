@@ -1,7 +1,9 @@
 /**
- * DIGITAL MENUBOARD v7.20 - DISPLAY JS v2.1
- * Fixes: Theme switching, Font support, Sold-out badges
+ * DIGITAL MENUBOARD v8.0 — DISPLAY JS
+ * Features: Remote Control, Heartbeat, Custom Theme, Instagram Feed,
+ *           Playlists, Schedules, Weather, QR, Animations, Multilingual
  */
+'use strict';
 
 class MenuboardDisplay {
     constructor() {
@@ -11,738 +13,577 @@ class MenuboardDisplay {
         this.settings = {};
         this.ticker = {};
         this.layout = {};
-        this.refreshInterval = null;
+        this.displayConfig = null;
         this.lastModified = null;
         this.fontLink = null;
-
+        this.currentLanguage = 'de';
+        this.translations = {};
+        this.weather = null;
+        this.currentSchedule = null;
+        this.currentPlaylistIndex = 0;
+        this.playlistTimer = null;
+        this.commandPollInterval = null;
+        this.isBlackout = false;
         this.init();
     }
 
     async init() {
         await this.loadData();
+        await this.loadSchedule();
+        await this.loadWeather();
+        await this.loadTranslations();
+        this.applyTheme();
+        this.applyFont();
         this.render();
         this.hideLoading();
         this.startAutoRefresh();
+        this.startCommandPolling();
+        this.startClocks();
         this.setupKeyboard();
     }
 
+    // ═══ DATA LOADING ═══
     async loadData() {
         try {
-            // v7.40: Support display-specific data loading
-            const displaySlug = window.DISPLAY_SLUG;
+            const res = await fetch('/data');
+            const fullData = await res.json();
+            const slug = window.DISPLAY_SLUG;
 
-            if (displaySlug) {
-                // Load display-specific configuration
-                const displayRes = await fetch('/data');
-                const fullData = await displayRes.json();
-                const display = (fullData.displays || []).find(d => d.slug === displaySlug);
-
+            if (slug) {
+                const display = (fullData.displays || []).find(d => d.slug === slug);
                 if (display) {
-                    this.data = fullData;
-                    this.products = fullData.products || [];
-                    // Use display-specific zones if available, otherwise fall back to global zones
+                    this.displayConfig = display;
                     this.zones = display.zones?.length > 0 ? display.zones : fullData.zones || [];
                     this.settings = { ...fullData.settings, ...display.settings };
-                    this.ticker = fullData.ticker || {};
-                    this.layout = fullData.layout || { width: 1920, height: 1080 };
-                    this.lastModified = fullData.lastModified;
-                    this.displayConfig = display; // Store display config
                 } else {
-                    // Fallback to global data
-                    this.data = fullData;
-                    this.products = fullData.products || [];
                     this.zones = fullData.zones || [];
                     this.settings = fullData.settings || {};
-                    this.ticker = fullData.ticker || {};
-                    this.layout = fullData.layout || { width: 1920, height: 1080 };
-                    this.lastModified = fullData.lastModified;
                 }
             } else {
-                // Standard global data loading
-                const res = await fetch('/data');
-                this.data = await res.json();
-                this.products = this.data.products || [];
-                this.zones = this.data.zones || [];
-                this.settings = this.data.settings || {};
-                this.ticker = this.data.ticker || {};
-                this.layout = this.data.layout || { width: 1920, height: 1080 };
-                this.lastModified = this.data.lastModified;
+                this.zones = fullData.zones || [];
+                this.settings = fullData.settings || {};
             }
 
-            this.applyTheme();
-            this.applyFont();
+            this.data = fullData;
+            this.products = fullData.products || [];
+            this.ticker = fullData.ticker || {};
+            this.layout = fullData.layout || { width: 1920, height: 1080 };
+            this.lastModified = fullData.lastModified;
         } catch (e) {
-            console.error('Fehler beim Laden:', e);
+            console.error('Ladefehler:', e);
         }
     }
 
-
-    // ==================== FEATURE 1: TIME-BASED CONTENT (v7.50) ====================
-
-    async loadSchedule() {
-        try {
-            const res = await fetch('/schedule');
-            const data = await res.json();
-            if (data.success && data.activeSchedule) {
-                this.currentSchedule = data.activeSchedule;
-                // Apply schedule-specific settings
-                if (this.currentSchedule.theme) {
-                    this.settings.theme = this.currentSchedule.theme;
-                }
-                if (this.currentSchedule.tickerText) {
-                    this.ticker.text = this.currentSchedule.tickerText;
-                }
-            }
-        } catch (e) {
-            console.error('Schedule load error:', e);
-        }
-    }
-
-    getScheduleProducts() {
-        if (!this.currentSchedule || !this.currentSchedule.productIds) {
-            return this.products;
-        }
-        return this.products.filter(p => this.currentSchedule.productIds.includes(p.id));
-    }
-
-    getScheduleBadge() {
-        return this.currentSchedule?.badge || null;
-    }
-
-    // ==================== FEATURE 2: WEATHER INTEGRATION (v7.50) ====================
-
-    async loadWeather() {
-        try {
-            const weatherEnabled = this.settings?.weather?.enabled !== false;
-            if (!weatherEnabled) return;
-
-            const lat = this.settings?.weather?.latitude || '52.52';
-            const lon = this.settings?.weather?.longitude || '13.41';
-
-            const res = await fetch(`/weather?lat=${lat}&lon=${lon}`);
-            this.weather = await res.json();
-        } catch (e) {
-            console.error('Weather load error:', e);
-            this.weather = { success: false, icon: '☀️', text: 'Wetter nicht verfügbar', recommendation: '' };
-        }
-    }
-
-    renderWeatherWidget() {
-        if (!this.weather || this.settings?.weather?.showOnDisplay === false) return '';
-
-        const w = this.weather;
-        const temp = w.temperature !== null ? `${w.temperature}°C` : '';
-        const showRec = this.settings?.weather?.showRecommendations !== false;
-
-        return `
-            <div class="weather-widget ${w.success ? '' : 'weather-offline'}">
-                <div class="weather-main">
-                    <span class="weather-icon">${w.icon || '☀️'}</span>
-                    <span class="weather-temp">${temp}</span>
-                    <span class="weather-text">${w.text || ''}</span>
-                </div>
-                ${showRec && w.recommendation ? `
-                <div class="weather-recommendation">
-                    <i class="fas fa-lightbulb"></i> ${w.recommendation}
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
-
-    // ==================== FEATURE 3: QR CODES (v7.50) ====================
-
-    generateQRCode(text, size = 80) {
-        // Simple QR code using QRServer API (no library needed)
-        const encoded = encodeURIComponent(text);
-        return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;
-    }
-
-    renderProductQR(product) {
-        const qrEnabled = this.settings?.qrCodes?.enabled !== false;
-        const showOnProducts = this.settings?.qrCodes?.showOnProducts !== false;
-        if (!qrEnabled || !showOnProducts) return '';
-
-        const baseUrl = this.settings?.qrCodes?.baseUrl || window.location.origin;
-        const qrText = `${baseUrl}/order?product=${product.id}`;
-        const qrUrl = this.generateQRCode(qrText, 60);
-
-        return `
-            <div class="product-qr">
-                <img src="${qrUrl}" alt="QR Code" loading="lazy">
-                <span>Scan für Bestellung</span>
-            </div>
-        `;
-    }
-
-    renderDisplayQR() {
-        const qrEnabled = this.settings?.qrCodes?.enabled !== false;
-        const showOnDisplay = this.settings?.qrCodes?.showOnDisplay !== false;
-        if (!qrEnabled || !showOnDisplay) return '';
-
-        const currentUrl = window.location.href;
-        const qrUrl = this.generateQRCode(currentUrl, 100);
-
-        return `
-            <div class="display-qr">
-                <img src="${qrUrl}" alt="Display QR" loading="lazy">
-                <span>Scan für Menü</span>
-            </div>
-        `;
-    }
-
-    // ==================== FEATURE 4: MULTILINGUAL (v7.50) ====================
-
-    async loadTranslations() {
-        // Built-in translations for common terms
-        this.translations = {
-            de: {
-                menu: 'Menü',
-                price: 'Preis',
-                soldOut: 'Ausverkauft',
-                lowStock: 'Wenig verfügbar',
-                bestseller: 'Bestseller',
-                new: 'Neu',
-                offer: 'Angebot',
-                limited: 'Limitiert',
-                scanToOrder: 'Scan für Bestellung',
-                weather: 'Wetter',
-                currentOffer: 'Aktuelles Angebot'
-            },
-            en: {
-                menu: 'Menu',
-                price: 'Price',
-                soldOut: 'Sold Out',
-                lowStock: 'Low Stock',
-                bestseller: 'Bestseller',
-                new: 'New',
-                offer: 'Offer',
-                limited: 'Limited',
-                scanToOrder: 'Scan to Order',
-                weather: 'Weather',
-                currentOffer: 'Current Offer'
-            },
-            ar: {
-                menu: 'قائمة الطعام',
-                price: 'السعر',
-                soldOut: 'نفذت الكمية',
-                lowStock: 'كمية محدودة',
-                bestseller: 'الأكثر مبيعاً',
-                new: 'جديد',
-                offer: 'عرض',
-                limited: 'محدود',
-                scanToOrder: 'امسح للطلب',
-                weather: 'الطقس',
-                currentOffer: 'العرض الحالي'
-            }
-        };
-
-        // Detect language from settings or browser
-        const enabled = this.settings?.languages?.enabled || ['de'];
-        const defaultLang = this.settings?.languages?.default || 'de';
-        this.currentLanguage = enabled.includes(defaultLang) ? defaultLang : enabled[0];
-    }
-
-    t(key) {
-        const lang = this.translations[this.currentLanguage] || this.translations['de'];
-        return lang[key] || key;
-    }
-
-    renderLanguageSelector() {
-        const enabled = this.settings?.languages?.enabled || ['de'];
-        const showSelector = this.settings?.languages?.showSelector !== false;
-
-        if (!showSelector || enabled.length < 2) return '';
-
-        const flags = { de: '🇩🇪', en: '🇬🇧', ar: '🇸🇦' };
-
-        return `
-            <div class="language-selector">
-                ${enabled.map(lang => `
-                    <button class="lang-btn ${lang === this.currentLanguage ? 'active' : ''}" 
-                            onclick="window.menuboard.setLanguage('${lang}')">
-                        ${flags[lang] || lang} ${lang.toUpperCase()}
-                    </button>
-                `).join('')}
-            </div>
-        `;
-    }
-
-    setLanguage(lang) {
-        this.currentLanguage = lang;
-        this.render();
-    }
-
-    // ==================== FEATURE 5: ANIMATIONS (v7.50) ====================
-
-    getAnimationClasses() {
-        const anims = this.settings?.animations || {};
-        if (!anims.enabled) return {};
-
-        return {
-            pageTransition: anims.pageTransition || 'slide',
-            productFadeIn: anims.productFadeIn !== false,
-            offerPulse: anims.offerPulse !== false,
-            duration: anims.transitionDuration || 500
-        };
-    }
-
-    animateProductEntry(element, index) {
-        const anims = this.getAnimationClasses();
-        if (!anims.productFadeIn) return;
-
-        element.style.opacity = '0';
-        element.style.transform = 'translateY(20px)';
-        element.style.transition = `all ${anims.duration}ms ease ${index * 100}ms`;
-
-        requestAnimationFrame(() => {
-            element.style.opacity = '1';
-            element.style.transform = 'translateY(0)';
-        });
-    }
-
-    animateOffer(element) {
-        const anims = this.getAnimationClasses();
-        if (!anims.offerPulse) return;
-
-        element.classList.add('pulse-animation');
-    }
+    // ═══ THEME ═══
     applyTheme() {
         const theme = this.settings.theme || 'dark';
-        // Remove all theme classes first
-        document.body.classList.remove('theme-light', 'theme-burger', 'theme-coffee', 'theme-dark');
-        // Always add the current theme class (including dark for explicit override)
-        document.body.classList.add(`theme-${theme}`);
-
-        // Also update CSS variables directly for instant feedback
         const root = document.documentElement;
-        if (theme === 'dark') {
-            root.style.setProperty('--bg-primary', '#0a0a0f');
-            root.style.setProperty('--bg-card', '#141420');
-            root.style.setProperty('--bg-card-hover', '#1a1a2e');
-            root.style.setProperty('--border-color', '#2a2a3a');
-            root.style.setProperty('--border-light', '#3a3a4a');
-            root.style.setProperty('--text-primary', '#ffffff');
-            root.style.setProperty('--text-secondary', '#b0b0c8');
-            root.style.setProperty('--text-muted', '#6a6a8a');
-            root.style.setProperty('--text-accent', '#FFD700');
-            root.style.setProperty('--accent-primary', '#6366f1');
-            root.style.setProperty('--accent-gold', '#FFD700');
-        } else if (theme === 'light') {
-            root.style.setProperty('--bg-primary', '#f5f5f5');
-            root.style.setProperty('--bg-card', '#ffffff');
-            root.style.setProperty('--bg-card-hover', '#f0f0f0');
-            root.style.setProperty('--border-color', '#e0e0e0');
-            root.style.setProperty('--border-light', '#d0d0d0');
-            root.style.setProperty('--text-primary', '#1a1a2e');
-            root.style.setProperty('--text-secondary', '#4a4a6a');
-            root.style.setProperty('--text-muted', '#8a8aaa');
-            root.style.setProperty('--text-accent', '#b8860b');
-            root.style.setProperty('--accent-primary', '#6366f1');
-            root.style.setProperty('--accent-gold', '#b8860b');
-        } else if (theme === 'burger') {
-            root.style.setProperty('--bg-primary', '#1a0a00');
-            root.style.setProperty('--bg-card', '#2a1500');
-            root.style.setProperty('--bg-card-hover', '#3a2000');
-            root.style.setProperty('--border-color', '#4a3000');
-            root.style.setProperty('--border-light', '#5a4000');
-            root.style.setProperty('--text-primary', '#ffffff');
-            root.style.setProperty('--text-secondary', '#e0c8a0');
-            root.style.setProperty('--text-muted', '#a08060');
-            root.style.setProperty('--text-accent', '#ffaa00');
-            root.style.setProperty('--accent-primary', '#ff6b00');
-            root.style.setProperty('--accent-gold', '#ffaa00');
-        } else if (theme === 'coffee') {
-            root.style.setProperty('--bg-primary', '#1a1200');
-            root.style.setProperty('--bg-card', '#2a1f0a');
-            root.style.setProperty('--bg-card-hover', '#3a2a10');
-            root.style.setProperty('--border-color', '#4a3a20');
-            root.style.setProperty('--border-light', '#5a4a30');
-            root.style.setProperty('--text-primary', '#ffffff');
-            root.style.setProperty('--text-secondary', '#d4c4a8');
-            root.style.setProperty('--text-muted', '#a09070');
-            root.style.setProperty('--text-accent', '#c4a35a');
-            root.style.setProperty('--accent-primary', '#8b6914');
-            root.style.setProperty('--accent-gold', '#c4a35a');
+        document.body.className = `theme-${theme}`;
+
+        const themes = {
+            dark:   { bgPrimary:'#0a0a0f', bgCard:'#141420', border:'#2a2a3a', textPrimary:'#ffffff', textSecondary:'#b0b0c8', textMuted:'#6a6a8a', accent:'#6c63ff', gold:'#FFD700' },
+            light:  { bgPrimary:'#f0f2f5', bgCard:'#ffffff', border:'#e0e0e0', textPrimary:'#1a1a2e', textSecondary:'#4a4a6a', textMuted:'#8a8aaa', accent:'#6366f1', gold:'#b8860b' },
+            burger: { bgPrimary:'#1a0a00', bgCard:'#2a1500', border:'#4a3000', textPrimary:'#ffffff', textSecondary:'#e0c8a0', textMuted:'#a08060', accent:'#ff6b00', gold:'#ffaa00' },
+            coffee: { bgPrimary:'#1a1200', bgCard:'#2a1f0a', border:'#4a3a20', textPrimary:'#ffffff', textSecondary:'#d4c4a8', textMuted:'#a09070', accent:'#8b6914', gold:'#c4a35a' }
+        };
+
+        if (theme === 'custom' && this.settings.customTheme) {
+            const c = this.settings.customTheme;
+            root.style.setProperty('--bg-primary', c.bgPrimary || '#0a0a0f');
+            root.style.setProperty('--bg-card', c.bgCard || '#141420');
+            root.style.setProperty('--border-color', c.borderColor || '#2a2a3a');
+            root.style.setProperty('--text-primary', c.textPrimary || '#ffffff');
+            root.style.setProperty('--text-secondary', c.textSecondary || '#b0b0c8');
+            root.style.setProperty('--accent-primary', c.accentPrimary || '#6c63ff');
+            root.style.setProperty('--accent-gold', c.priceColor || '#FFD700');
+        } else {
+            const t = themes[theme] || themes.dark;
+            root.style.setProperty('--bg-primary', t.bgPrimary);
+            root.style.setProperty('--bg-card', t.bgCard);
+            root.style.setProperty('--border-color', t.border);
+            root.style.setProperty('--text-primary', t.textPrimary);
+            root.style.setProperty('--text-secondary', t.textSecondary);
+            root.style.setProperty('--text-muted', t.textMuted);
+            root.style.setProperty('--accent-primary', t.accent);
+            root.style.setProperty('--accent-gold', t.gold);
         }
     }
 
     applyFont() {
         const font = this.settings.font || 'Inter';
-        const fontMap = {
-            'Inter': 'Inter',
-            'Roboto': 'Roboto',
-            'Montserrat': 'Montserrat',
-            'Oswald': 'Oswald',
-            'Playfair': 'Playfair Display',
-            'Bebas': 'Bebas Neue',
-            'Poppins': 'Poppins'
-        };
-
-        const fontFamily = fontMap[font] || 'Inter';
-        document.body.style.fontFamily = `'${fontFamily}', -apple-system, BlinkMacSystemFont, sans-serif`;
-
-        // Load Google Font if not already loaded
-        const fontUrl = `https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;600;700;800;900&display=swap`;
-
-        if (this.fontLink) {
-            this.fontLink.href = fontUrl;
-        } else {
-            this.fontLink = document.createElement('link');
-            this.fontLink.rel = 'stylesheet';
-            this.fontLink.href = fontUrl;
-            document.head.appendChild(this.fontLink);
+        const googleFonts = ['Inter','DM Sans','Roboto','Poppins','Oswald','Playfair Display','Montserrat','Raleway','Lato','Nunito'];
+        document.body.style.fontFamily = `'${font}', system-ui, sans-serif`;
+        if (googleFonts.includes(font)) {
+            const url = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g,'+')}:wght@300;400;500;600;700;800&display=swap`;
+            if (this.fontLink) { this.fontLink.href = url; }
+            else { this.fontLink = document.createElement('link'); this.fontLink.rel = 'stylesheet'; this.fontLink.href = url; document.head.appendChild(this.fontLink); }
         }
     }
 
+    // ═══ SCHEDULE ═══
+    async loadSchedule() {
+        try {
+            const res = await fetch('/schedule');
+            const data = await res.json();
+            if (data.activeSchedule) {
+                this.currentSchedule = data.activeSchedule;
+                if (this.currentSchedule.theme) this.settings.theme = this.currentSchedule.theme;
+                if (this.currentSchedule.tickerText) this.ticker.text = this.currentSchedule.tickerText;
+            }
+        } catch (e) {}
+    }
+
+    // ═══ WEATHER ═══
+    async loadWeather() {
+        try {
+            const w = this.settings.weather || this.data?.weather || {};
+            if (w.enabled === false) return;
+            const lat = w.latitude || '52.52';
+            const lon = w.longitude || '13.41';
+            const res = await fetch(`/weather?lat=${lat}&lon=${lon}`);
+            if (res.ok) this.weather = await res.json();
+        } catch (e) {}
+    }
+
+    // ═══ TRANSLATIONS ═══
+    async loadTranslations() {
+        this.translations = {
+            de: { soldOut:'AUSVERKAUFT', lowStock:'WENIG VERFÜGBAR', scanOrder:'Scan für Bestellung', new:'Neu', bestseller:'Bestseller', offer:'Angebot', limited:'Limitiert' },
+            en: { soldOut:'SOLD OUT', lowStock:'LOW STOCK', scanOrder:'Scan to Order', new:'New', bestseller:'Bestseller', offer:'Offer', limited:'Limited' },
+            ar: { soldOut:'نفذت الكمية', lowStock:'كمية محدودة', scanOrder:'امسح للطلب', new:'جديد', bestseller:'الأكثر مبيعاً', offer:'عرض', limited:'محدود' },
+            tr: { soldOut:'TÜKENDİ', lowStock:'AZ KALDI', scanOrder:'Sipariş için tara', new:'Yeni', bestseller:'Çok Satan', offer:'Teklif', limited:'Sınırlı' }
+        };
+        const lang = this.settings?.languages?.default || 'de';
+        this.currentLanguage = lang;
+    }
+
+    t(key) { return (this.translations[this.currentLanguage] || this.translations.de)[key] || key; }
+
+    // ═══ RENDER ═══
     render() {
+        if (this.isBlackout) return;
         const container = document.getElementById('displayContainer');
+        if (!container) return;
         container.innerHTML = '';
+        container.style.position = 'relative';
+        container.style.width = '100vw';
+        container.style.height = '100vh';
+        container.style.overflow = 'hidden';
+        container.style.background = 'var(--bg-primary)';
 
-        this.zones.forEach((zone, index) => {
+        const anims = this.settings?.animations || {};
+        const fadeIn = anims.enabled !== false && anims.productFadeIn !== false;
+
+        this.zones.forEach((zone, i) => {
             if (zone.visible === false) return;
-
             const el = document.createElement('div');
             el.className = `display-zone zone-${zone.type}`;
-            el.style.left = zone.x + '%';
-            el.style.top = zone.y + '%';
-            el.style.width = zone.w + '%';
-            el.style.height = zone.h + '%';
-            el.style.animationDelay = `${index * 0.1}s`;
+            el.dataset.zoneId = zone.id;
+            el.style.cssText = `position:absolute;left:${zone.x}%;top:${zone.y}%;width:${zone.w}%;height:${zone.h}%;box-sizing:border-box;overflow:hidden;`;
+            if (fadeIn) { el.style.opacity = '0'; el.style.transform = 'translateY(10px)'; el.style.transition = `opacity .4s ease ${i * .08}s, transform .4s ease ${i * .08}s`; }
 
             switch (zone.type) {
-                case 'menu':
-                    el.innerHTML = this.renderMenuZone(zone);
-                    break;
-                case 'media':
-                    el.innerHTML = this.renderMediaZone(zone);
-                    break;
-                case 'ticker':
-                    el.innerHTML = this.renderTickerZone(zone);
-                    break;
-                case 'text':
-                    el.innerHTML = this.renderTextZone(zone);
-                    break;
-                case 'clock':
-                    el.innerHTML = this.renderClockZone(zone);
-                    break;
+                case 'menu':     el.innerHTML = this.renderMenuZone(zone); break;
+                case 'media':    el.innerHTML = this.renderMediaZone(zone); break;
+                case 'ticker':   el.innerHTML = this.renderTickerZone(zone); break;
+                case 'text':     el.innerHTML = this.renderTextZone(zone); break;
+                case 'clock':    el.innerHTML = this.renderClockZone(zone); break;
+                case 'social':   el.innerHTML = this.renderSocialZone(zone); break;
+                case 'weather':  el.innerHTML = this.renderWeatherZone(zone); break;
             }
 
             container.appendChild(el);
+            if (fadeIn) requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'none'; });
         });
 
         this.applyTickerSpeed();
+        this.trackAnalytics();
     }
 
-    // ==================== MENU ZONE WITH ARTICLE BUILDER ====================
+    // ═══ MENU ZONE ═══
     renderMenuZone(zone) {
         const zoneProducts = (zone.productIds || [])
             .map(id => this.products.find(p => p.id === id))
-            .filter(p => p);
+            .filter(Boolean);
 
-        if (zoneProducts.length === 0) {
-            return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);flex-direction:column;gap:8px;">
-                <i class="fas fa-utensils" style="font-size:28px;"></i>
-                <p style="font-size:14px;">Keine Produkte zugewiesen</p>
-            </div>`;
-        }
+        if (!zoneProducts.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);flex-direction:column;gap:8px;"><i class="fas fa-utensils" style="font-size:28px;"></i><p>Keine Produkte</p></div>`;
 
         const currency = this.settings.currency || '€';
-        const style = zone.articleStyle || {};
+        const cpos = this.settings.currencyPosition || 'after';
+        const fmtPrice = p => cpos === 'before' ? `${currency} ${p}` : `${p} ${currency}`;
 
-        // Default settings
-        const showImage = style.showImage !== false;
-        const showTitle = style.showTitle !== false;
-        const showPrice = style.showPrice !== false;
-        const showDescription = style.showDescription || false;
-        const showBadge = style.showBadge !== false;
-        const showStock = style.showStock !== false;
-        const pricePosition = style.pricePosition || 'bottom-right';
-        const priceStyle = style.priceStyle || 'badge-gold';
-        const imageSize = style.imageSize || 'large';
-        const cardLayout = style.cardLayout || 'vertical';
-        const textAlign = style.textAlign || 'left';
-        const columnsCount = style.columnsCount || 'auto';
+        const s = zone.articleStyle || {};
+        const showImage = s.showImage !== false;
+        const showTitle = s.showTitle !== false;
+        const showPrice = s.showPrice !== false;
+        const showDesc = s.showDescription || false;
+        const showBadge = s.showBadge !== false;
+        const showStock = s.showStock !== false;
+        const pricePos = s.pricePosition || 'bottom-right';
+        const priceStyle = s.priceStyle || 'badge-gold';
+        const imgSize = s.imageSize || 'large';
+        const layout = s.cardLayout || 'vertical';
+        const align = s.textAlign || 'left';
+        const colCount = s.columnsCount || 'auto';
+        const cols = colCount === 'auto'
+            ? (zoneProducts.length <= 2 ? 2 : zoneProducts.length <= 6 ? 3 : 4)
+            : parseInt(colCount);
 
-        // Calculate columns
-        let cols = columnsCount === 'auto' ? 
-            (zoneProducts.length <= 4 ? 2 : zoneProducts.length <= 8 ? 3 : 4) : 
-            parseInt(columnsCount);
+        const priceClass = { 'badge-gold':'price-badge-gold', 'badge-dark':'price-badge-dark', 'text-plain':'price-plain', 'text-bold':'price-bold' }[priceStyle] || 'price-badge-gold';
 
-        const cards = zoneProducts.map((product, i) => {
-            // Stock status overlay
-            let stockOverlay = '';
-            if (showStock && product.stockStatus) {
-                const stockClass = product.stockStatus === 'soldout' ? 'soldout' : 
-                                   product.stockStatus === 'low' ? 'low' : '';
-                const stockText = product.stockStatus === 'soldout' ? 'AUSVERKAUFT' : 
-                                  product.stockStatus === 'low' ? 'NUR NOCH WENIGE' : '';
-                if (stockClass) {
-                    stockOverlay = `<div class="stock-overlay ${stockClass}">${stockText}</div>`;
-                }
+        const cards = zoneProducts.map((p, i) => {
+            const isSoldOut = p.stockStatus === 'soldout';
+            const isLow = p.stockStatus === 'low';
+            const stockOverlay = showStock && isSoldOut ? `<div class="stock-overlay soldout">${this.t('soldOut')}</div>` : showStock && isLow ? `<div class="stock-overlay low">${this.t('lowStock')}</div>` : '';
+            const opacity = isSoldOut ? 'opacity:.5;' : '';
+            const imgH = { large:'55%', medium:'45%', small:'35%' }[imgSize] || '50%';
+            const imgHtml = showImage ? (p.image
+                ? `<div class="product-img-wrap" style="height:${imgH}"><img src="${p.image}" alt="${p.title}" onerror="this.parentNode.innerHTML='<div class=pimg-placeholder><i class=fas fa-utensils></i></div>'">${stockOverlay}</div>`
+                : `<div class="product-img-wrap" style="height:${imgH}"><div class="pimg-placeholder"><i class="fas fa-utensils"></i></div></div>`) : '';
+            const badgeHtml = showBadge && p.badge && !isSoldOut ? `<span class="pbadge pbadge-${p.badge.toLowerCase()}">${p.badge}</span>` : '';
+            const priceHtml = showPrice && !isSoldOut ? `<span class="${priceClass} ppos-${pricePos.replace('-','_')}">${fmtPrice(p.price)}</span>` : '';
+            const titleHtml = showTitle ? `<div class="ptitle" style="text-align:${align};${opacity}">${p.title}</div>` : '';
+            const descHtml = showDesc && p.description ? `<div class="pdesc" style="text-align:${align};${opacity}">${p.description}</div>` : '';
+
+            if (layout === 'compact') {
+                return `<div class="pcard pcard-compact"><div class="pinfo" style="text-align:${align}">${titleHtml}${priceHtml}</div></div>`;
             }
-
-            // Image
-            let imageHtml = '';
-            if (showImage) {
-                const imgHeight = imageSize === 'large' ? '50%' : imageSize === 'medium' ? '40%' : imageSize === 'small' ? '30%' : '25%';
-                imageHtml = product.image ? 
-                    `<div class="product-image-display" style="height:${imgHeight};">
-                        <img src="${product.image}" alt="${product.title}" onerror="this.style.display='none';this.parentElement.innerHTML='<div class=\'placeholder\'><i class=\'fas fa-utensils\'></i></div>'">
-                        ${stockOverlay}
-                    </div>` :
-                    `<div class="product-image-display" style="height:${imgHeight};"><div class="placeholder"><i class="fas fa-utensils"></i></div></div>`;
+            if (layout === 'horizontal') {
+                return `<div class="pcard pcard-horizontal">${imgHtml}<div class="pinfo" style="text-align:${align}">${badgeHtml}${titleHtml}${descHtml}${priceHtml}</div></div>`;
             }
-
-            // Badge
-            let badgeHtml = '';
-            if (showBadge && product.badge && product.stockStatus !== 'soldout') {
-                badgeHtml = `<span class="product-badge-display ${product.badge.toLowerCase()}">${product.badge}</span>`;
-            }
-
-            // Price
-            let priceHtml = '';
-            if (showPrice && product.stockStatus !== 'soldout') {
-                const priceClass = priceStyle === 'badge-gold' ? 'price-badge-gold' : 
-                                   priceStyle === 'badge-dark' ? 'price-badge-dark' :
-                                   priceStyle === 'text-plain' ? 'price-text-plain' : 'price-text-bold';
-
-                const pricePosClass = pricePosition === 'bottom-right' ? 'price-bottom-right' :
-                                      pricePosition === 'top-right' ? 'price-top-right' :
-                                      pricePosition === 'inline' ? 'price-inline' : 'price-overlay';
-
-                priceHtml = `<span class="${priceClass} ${pricePosClass}">${product.price}${currency}</span>`;
-            }
-
-            // Title
-            let titleHtml = '';
-            if (showTitle) {
-                const opacity = product.stockStatus === 'soldout' ? 'opacity:0.5;text-decoration:line-through;' : '';
-                titleHtml = `<div class="product-title-display" style="text-align:${textAlign};${opacity}">${product.title}</div>`;
-            }
-
-            // Description
-            let descHtml = '';
-            if (showDescription && product.description) {
-                const opacity = product.stockStatus === 'soldout' ? 'opacity:0.4;' : '';
-                descHtml = `<div class="product-desc-display" style="text-align:${textAlign};${opacity}">${product.description}</div>`;
-            }
-
-            // Layout
-            const isHorizontal = cardLayout === 'horizontal';
-            const isCompact = cardLayout === 'compact';
-
-            if (isCompact) {
-                return `
-                    <div class="product-card-display product-compact" style="animation-delay: ${i * 0.08}s">
-                        <div class="product-info-display" style="text-align:${textAlign};">
-                            ${titleHtml}
-                            ${priceHtml}
-                            ${descHtml}
-                        </div>
-                    </div>
-                `;
-            }
-
-            if (isHorizontal) {
-                return `
-                    <div class="product-card-display product-horizontal" style="animation-delay: ${i * 0.08}s">
-                        ${imageHtml}
-                        <div class="product-info-display" style="text-align:${textAlign};">
-                            ${badgeHtml}
-                            ${titleHtml}
-                            ${descHtml}
-                            ${pricePosition === 'inline' ? priceHtml : ''}
-                        </div>
-                        ${pricePosition !== 'inline' ? priceHtml : ''}
-                    </div>
-                `;
-            }
-
-            // Vertical (default)
-            return `
-                <div class="product-card-display" style="animation-delay: ${i * 0.08}s">
-                    <div class="product-image-wrapper">
-                        ${imageHtml}
-                        ${badgeHtml}
-                        ${pricePosition === 'overlay' ? priceHtml : ''}
-                        ${pricePosition === 'bottom-right' ? priceHtml : ''}
-                    </div>
-                    <div class="product-info-display" style="text-align:${textAlign};">
-                        ${titleHtml}
-                        ${descHtml}
-                        ${pricePosition === 'inline' ? priceHtml : ''}
-                    </div>
-                    ${pricePosition === 'top-right' ? priceHtml : ''}
-                </div>
-            `;
+            return `<div class="pcard"><div class="pimg-area">${imgHtml}${badgeHtml}${pricePos !== 'inline' ? priceHtml : ''}</div><div class="pinfo" style="text-align:${align}">${titleHtml}${descHtml}${pricePos === 'inline' ? priceHtml : ''}</div></div>`;
         }).join('');
 
-        return `
-            <div class="menu-header">
-                <h2>${zone.name}</h2>
-            </div>
-            <div class="menu-grid" style="grid-template-columns: repeat(${cols}, 1fr);">
-                ${cards}
-            </div>
-        `;
+        return `<div class="menu-zone-wrap"><div class="menu-zone-grid" style="grid-template-columns:repeat(${cols},1fr)">${cards}</div></div>`;
     }
 
+    // ═══ MEDIA ZONE ═══
     renderMediaZone(zone) {
-        const src = zone.mediaSrc || '';
-        const type = zone.mediaType || 'image';
-
-        if (!src) {
-            return `<div class="media-placeholder">
-                <i class="fas fa-image"></i>
-                <span>Kein Media zugewiesen</span>
-            </div>`;
-        }
-
-        if (type === 'video') {
-            return `<video src="${src}" autoplay muted loop playsinline onerror="this.parentElement.innerHTML='<div class=\'media-placeholder\'><i class=\'fas fa-film\'></i><span>Video nicht verfügbar</span></div>'"></video>`;
-        }
-
-        return `<img src="${src}" alt="Media" onerror="this.parentElement.innerHTML='<div class=\'media-placeholder\'><i class=\'fas fa-image\'></i><span>Bild nicht verfügbar</span></div>'">`;
+        const { mediaSrc: src = '', mediaType: type = 'image' } = zone;
+        if (!src) return `<div class="zone-placeholder"><i class="fas fa-image"></i><span>Kein Medium</span></div>`;
+        if (type === 'video') return `<video src="${src}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;"></video>`;
+        return `<img src="${src}" alt="Media" style="width:100%;height:100%;object-fit:cover;">`;
     }
 
+    // ═══ TICKER ZONE ═══
     renderTickerZone(zone) {
-        const text = zone.text || this.ticker.text || '🍔 Willkommen!';
-        const speed = this.ticker.speed || 50;
+        const text = zone.tickerText || zone.text || this.ticker.text || '🍔 Willkommen!';
         const color = this.ticker.color || '#FFD700';
-        const bgColor = this.ticker.backgroundColor || '#1a1a2e';
+        const bg = this.ticker.backgroundColor || '#1a1a2e';
         const fontSize = this.ticker.fontSize || 24;
-        const duration = Math.max(10, text.length / speed * 20);
-
-        return `
-            <div class="ticker-wrapper" style="background: ${bgColor};">
-                <div class="ticker-content" style="color: ${color}; font-size: ${fontSize}px; animation-duration: ${duration}s;">
-                    ${text} &nbsp;&nbsp;&nbsp; ${text} &nbsp;&nbsp;&nbsp; ${text} &nbsp;&nbsp;&nbsp; ${text}
-                </div>
+        const repeat = text + ' ⬥ ' + text + ' ⬥ ' + text + ' ⬥ ' + text;
+        return `<div class="ticker-wrap" style="background:${bg};height:100%;display:flex;align-items:center;overflow:hidden;">
+            <div class="ticker-track" style="color:${color};font-size:${fontSize}px;white-space:nowrap;display:inline-block;will-change:transform;">
+                ${repeat}
             </div>
-        `;
-    }
-
-    renderTextZone(zone) {
-        const text = zone.text || '';
-        const size = zone.textSize || 24;
-        const color = zone.textColor || '#ffffff';
-        const align = zone.textAlign || 'left';
-
-        return `
-            <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:${align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'};padding:16px;">
-                <span style="color:${color};font-size:${size}px;font-weight:600;text-align:${align};line-height:1.4;">${text}</span>
-            </div>
-        `;
-    }
-
-    renderClockZone(zone) {
-        return `
-            <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;" id="clockZone_${zone.id}">
-                <div class="clock-time" style="font-size:clamp(32px,4vw,64px);font-weight:800;color:var(--text-accent);font-variant-numeric:tabular-nums;">00:00</div>
-                <div class="clock-date" style="font-size:clamp(14px,1.5vw,24px);color:var(--text-secondary);">--.--.----</div>
-            </div>
-        `;
+        </div>`;
     }
 
     applyTickerSpeed() {
-        document.querySelectorAll('.ticker-content').forEach(ticker => {
-            const text = ticker.textContent;
+        document.querySelectorAll('.ticker-track').forEach(el => {
             const speed = this.ticker.speed || 50;
-            const duration = Math.max(10, text.length / speed * 20);
-            ticker.style.animationDuration = `${duration}s`;
+            const len = el.textContent.length;
+            const dur = Math.max(8, len / speed * 15);
+            el.style.animation = `none`;
+            el.offsetHeight; // reflow
+            el.style.animation = `ticker-scroll ${dur}s linear infinite`;
         });
     }
 
-    startClocks() {
-        const updateClocks = () => {
-            document.querySelectorAll('[id^="clockZone_"]').forEach(el => {
-                const now = new Date();
-                const timeEl = el.querySelector('.clock-time');
-                const dateEl = el.querySelector('.clock-date');
-                if (timeEl) timeEl.textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                if (dateEl) dateEl.textContent = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            });
-        };
-        updateClocks();
-        setInterval(updateClocks, 1000);
+    // ═══ TEXT ZONE ═══
+    renderTextZone(zone) {
+        const { text = '', fontSize: size = 24, color = '#fff', textAlign: align = 'center' } = zone;
+        const justify = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
+        return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:${justify};padding:16px;">
+            <span style="color:${color};font-size:${size}px;font-weight:600;text-align:${align};line-height:1.4;">${text}</span>
+        </div>`;
     }
 
-    // ==================== AUTO REFRESH ====================
+    // ═══ CLOCK ZONE ═══
+    renderClockZone(zone) {
+        return `<div class="clock-zone" id="clock_${zone.id}">
+            <div class="clock-time">00:00</div>
+            <div class="clock-date">--.--.----</div>
+        </div>`;
+    }
+
+    startClocks() {
+        const tick = () => {
+            const now = new Date();
+            document.querySelectorAll('[id^="clock_"]').forEach(el => {
+                const t = el.querySelector('.clock-time');
+                const d = el.querySelector('.clock-date');
+                if (t) t.textContent = now.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' });
+                if (d) d.textContent = now.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+            });
+        };
+        tick();
+        setInterval(tick, 1000);
+    }
+
+    // ═══ WEATHER ZONE ═══
+    renderWeatherZone(zone) {
+        if (!this.weather) return `<div class="zone-placeholder"><i class="fas fa-cloud"></i><span>Wetter lädt…</span></div>`;
+        const w = this.weather;
+        const showRec = this.settings?.weather?.showRecommendations !== false;
+        return `<div class="weather-zone">
+            <div class="weather-main">
+                <span class="weather-icon">${w.icon || '🌡️'}</span>
+                <span class="weather-temp">${w.temperature}°C</span>
+                <span class="weather-wind">💨 ${w.windspeed} km/h</span>
+            </div>
+            ${showRec && w.recommendation ? `<div class="weather-rec">${w.recommendation}</div>` : ''}
+        </div>`;
+    }
+
+    // ═══ SOCIAL MEDIA ZONE (Instagram-Feed) ═══
+    renderSocialZone(zone) {
+        const config = zone.socialConfig || {};
+        const type = config.type || 'instagram';
+        const handle = config.handle || '';
+        const postsCount = config.postsCount || 4;
+        const hashtag = config.hashtag || '';
+        const embedToken = config.embedToken || '';
+
+        // Instagram oEmbed / Public embed approach
+        // Uses Instagram's official embed or a hashtag grid via RSS bridge
+        if (type === 'instagram') {
+            if (embedToken && handle) {
+                // Real Instagram Basic Display API embed
+                return this.renderInstagramFeed(handle, postsCount, embedToken, zone);
+            }
+            // Fallback: branded placeholder with handle
+            return this.renderInstagramPlaceholder(handle, hashtag, postsCount, zone);
+        }
+
+        return `<div class="zone-placeholder"><i class="fab fa-instagram"></i><span>Social Feed konfigurieren</span></div>`;
+    }
+
+    renderInstagramFeed(handle, count, token, zone) {
+        const zoneId = `ig_${zone.id}`;
+        // Fetch via proxy after render
+        setTimeout(() => this.fetchInstagramPosts(handle, count, token, zoneId), 100);
+        return `<div class="social-zone" id="${zoneId}">
+            <div class="social-header">
+                <i class="fab fa-instagram"></i>
+                <span>@${handle}</span>
+            </div>
+            <div class="social-grid social-grid-${Math.min(count, 4)}" id="${zoneId}_grid">
+                ${Array.from({length: count}, (_,i) => `<div class="social-card loading" style="animation-delay:${i*.1}s"><div class="social-shimmer"></div></div>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    async fetchInstagramPosts(handle, count, token, containerId) {
+        try {
+            // Instagram Basic Display API — requires user access token
+            const res = await fetch(`https://graph.instagram.com/me/media?fields=id,media_type,media_url,thumbnail_url,caption,timestamp&limit=${count}&access_token=${token}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message);
+            const grid = document.getElementById(containerId + '_grid');
+            if (!grid) return;
+            grid.innerHTML = (data.data || []).slice(0, count).map(post => {
+                const src = post.media_type === 'VIDEO' ? post.thumbnail_url : post.media_url;
+                const caption = (post.caption || '').substring(0, 80) + (post.caption?.length > 80 ? '…' : '');
+                return `<div class="social-card">
+                    <div class="social-card-img"><img src="${src}" alt="${caption}" loading="lazy"></div>
+                    ${caption ? `<div class="social-card-caption">${caption}</div>` : ''}
+                </div>`;
+            }).join('');
+        } catch (e) {
+            // Fallback to placeholder on error
+            const grid = document.getElementById(containerId + '_grid');
+            if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:20px;font-size:13px;"><i class="fab fa-instagram" style="font-size:28px;margin-bottom:8px;display:block;"></i>@${handle}<br><small>${e.message}</small></div>`;
+        }
+    }
+
+    renderInstagramPlaceholder(handle, hashtag, count, zone) {
+        // Demo placeholder with brand styling — shown when no token configured
+        const mockPosts = [
+            { emoji: '🍔', caption: 'Classic Burger – Unser Bestseller!' },
+            { emoji: '🍟', caption: 'Crispy Fries – Frisch aus der Fritteuse' },
+            { emoji: '🥤', caption: 'Summer Drinks sind da!' },
+            { emoji: '🍰', caption: 'Desserts des Monats' },
+            { emoji: '🎉', caption: 'Wochenend-Special läuft!' },
+            { emoji: '🌮', caption: 'Neue Gerichte auf der Karte' },
+        ].slice(0, count);
+
+        return `<div class="social-zone social-zone--demo">
+            <div class="social-header">
+                <i class="fab fa-instagram"></i>
+                <span>${handle ? '@' + handle : (hashtag ? '#' + hashtag : 'Instagram Feed')}</span>
+                <span class="social-demo-badge">Demo</span>
+            </div>
+            <div class="social-grid social-grid-${Math.min(count, 4)}">
+                ${mockPosts.map(p => `<div class="social-card">
+                    <div class="social-card-img social-card-demo">${p.emoji}</div>
+                    <div class="social-card-caption">${p.caption}</div>
+                </div>`).join('')}
+            </div>
+            <div class="social-footer">
+                <small>Instagram-Token in Admin → Features konfigurieren</small>
+            </div>
+        </div>`;
+    }
+
+    // ═══ REMOTE CONTROL ═══
+    startCommandPolling() {
+        if (!this.displayConfig) return;
+        const poll = async () => {
+            try {
+                const res = await fetch(`/displays/${this.displayConfig.id}/commands`);
+                const data = await res.json();
+                if (data.success && data.commands?.length) {
+                    data.commands.forEach(cmd => this.executeCommand(cmd));
+                }
+            } catch (e) {}
+        };
+        poll();
+        this.commandPollInterval = setInterval(poll, 5000);
+    }
+
+    executeCommand(cmd) {
+        console.log('Remote command:', cmd.command);
+        switch (cmd.command) {
+            case 'reload':
+                window.location.reload();
+                break;
+            case 'blackout':
+                this.setBlackout(true);
+                break;
+            case 'wake':
+                this.setBlackout(false);
+                break;
+            case 'next_template':
+                this.nextTemplate();
+                break;
+            case 'refresh_data':
+                this.loadData().then(() => { this.applyTheme(); this.applyFont(); this.render(); });
+                break;
+            case 'set_template':
+                if (cmd.templateId) this.applyRemoteTemplate(cmd.templateId);
+                break;
+            case 'set_theme':
+                if (cmd.theme) { this.settings.theme = cmd.theme; this.applyTheme(); }
+                break;
+            case 'show_message':
+                if (cmd.message) this.showOverlayMessage(cmd.message, cmd.duration || 5000);
+                break;
+        }
+    }
+
+    setBlackout(on) {
+        this.isBlackout = on;
+        const container = document.getElementById('displayContainer');
+        if (!container) return;
+        if (on) {
+            container.innerHTML = '<div style="width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;"><span style="color:#333;font-size:48px;">●</span></div>';
+        } else {
+            this.render();
+        }
+    }
+
+    async nextTemplate() {
+        if (!this.data?.templates?.length) return;
+        const current = this.displayConfig?.templateId || this.data.templates[0].id;
+        const idx = this.data.templates.findIndex(t => t.id === current);
+        const next = this.data.templates[(idx + 1) % this.data.templates.length];
+        this.zones = JSON.parse(JSON.stringify(next.zones || []));
+        this.render();
+    }
+
+    async applyRemoteTemplate(templateId) {
+        const tpl = this.data?.templates?.find(t => t.id === templateId);
+        if (!tpl) return;
+        this.zones = JSON.parse(JSON.stringify(tpl.zones || []));
+        this.render();
+    }
+
+    showOverlayMessage(message, duration = 5000) {
+        const existing = document.getElementById('overlay-message');
+        if (existing) existing.remove();
+        const el = document.createElement('div');
+        el.id = 'overlay-message';
+        el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);color:#fff;padding:32px 48px;border-radius:16px;font-size:clamp(20px,3vw,48px);font-weight:700;z-index:9999;text-align:center;border:2px solid rgba(255,255,255,.2);backdrop-filter:blur(8px);';
+        el.textContent = message;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), duration);
+    }
+
+    // ═══ ANALYTICS ═══
+    async trackAnalytics() {
+        try {
+            const displayId = this.displayConfig?.id;
+            // Track visible products
+            this.zones.filter(z => z.type === 'menu').forEach(zone => {
+                (zone.productIds || []).forEach(id => {
+                    fetch('/analytics/track', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'product_view', id, displayId }) }).catch(() => {});
+                });
+            });
+            // Track display view
+            if (displayId) {
+                fetch('/analytics/track', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'display_view', displayId }) }).catch(() => {});
+            }
+        } catch (e) {}
+    }
+
+    // ═══ AUTO REFRESH ═══
     startAutoRefresh() {
         const interval = (this.settings.refreshInterval || 30) * 1000;
-
-        this.refreshInterval = setInterval(async () => {
+        setInterval(async () => {
             try {
                 const res = await fetch('/data');
                 const newData = await res.json();
-
                 if (newData.lastModified !== this.lastModified) {
                     this.data = newData;
                     this.products = newData.products || [];
-
-                    // v7.40: Use display-specific zones if in display mode
-                    if (this.displayConfig) {
-                        const display = (newData.displays || []).find(d => d.id === this.displayConfig.id);
-                        if (display) {
-                            this.zones = display.zones?.length > 0 ? display.zones : newData.zones || [];
-                            this.displayConfig = display;
-                        } else {
-                            this.zones = newData.zones || [];
-                        }
-                    } else {
-                        this.zones = newData.zones || [];
-                    }
-
-                    this.settings = newData.settings || {};
+                    const slug = window.DISPLAY_SLUG;
+                    if (slug) {
+                        const disp = (newData.displays || []).find(d => d.slug === slug);
+                        if (disp) { this.displayConfig = disp; this.zones = disp.zones?.length > 0 ? disp.zones : newData.zones || []; this.settings = { ...newData.settings, ...disp.settings }; }
+                        else { this.zones = newData.zones || []; this.settings = newData.settings || {}; }
+                    } else { this.zones = newData.zones || []; this.settings = newData.settings || {}; }
                     this.ticker = newData.ticker || {};
                     this.lastModified = newData.lastModified;
-                    this.applyTheme();
-                    this.applyFont();
-                    this.render();
+                    this.applyTheme(); this.applyFont(); this.render();
                 }
-            } catch (e) {
-                console.error('Refresh error:', e);
-            }
+            } catch (e) {}
         }, interval);
 
-        // v7.40: Send heartbeat if in display mode
+        // Heartbeat
         if (this.displayConfig) {
-            setInterval(async () => {
-                try {
-                    await fetch(`/displays/${this.displayConfig.id}/heartbeat`, { method: 'POST' });
-                } catch (e) {
-                    // Silent fail for heartbeat
-                }
+            setInterval(() => {
+                fetch(`/displays/${this.displayConfig.id}/heartbeat`, { method:'POST' }).catch(() => {});
             }, 30000);
         }
 
-        this.startClocks();
+        // Schedule check every 60s
+        setInterval(() => this.loadSchedule(), 60000);
+
+        // Weather refresh every 5min
+        setInterval(() => this.loadWeather(), 5 * 60 * 1000);
     }
 
+    // ═══ KEYBOARD ═══
     setupKeyboard() {
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', e => {
             if (e.key === 'F11') { e.preventDefault(); this.toggleFullscreen(); }
-            if (e.key === 'F5') { e.preventDefault(); this.loadData().then(() => this.render()); }
-            if (e.key === 'Escape' && document.fullscreenElement) { document.exitFullscreen(); }
+            if (e.key === 'F5') { e.preventDefault(); this.loadData().then(() => { this.applyTheme(); this.applyFont(); this.render(); }); }
+            if (e.key === 'Escape' && document.fullscreenElement) document.exitFullscreen();
+            if (e.key === 'b' || e.key === 'B') this.setBlackout(!this.isBlackout);
         });
     }
 
     toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {});
-        } else {
-            document.exitFullscreen();
-        }
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+        else document.exitFullscreen();
     }
 
     hideLoading() {
-        const loading = document.getElementById('loadingScreen');
-        if (loading) {
-            loading.classList.add('hidden');
-            setTimeout(() => loading.remove(), 500);
-        }
+        const el = document.getElementById('loadingScreen');
+        if (el) { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; setTimeout(() => el.remove(), 400); }
     }
 }
 
-const display = new MenuboardDisplay();
+// Global instance
+window.menuboard = new MenuboardDisplay();
