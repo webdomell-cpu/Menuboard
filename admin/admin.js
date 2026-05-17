@@ -1,7 +1,9 @@
 /**
- * DIGITAL MENUBOARD v7.20 - ADMIN JS v2.1
- * Fixes: Image upload, Stock status, Font selection, Text toggle
+ * DIGITAL MENUBOARD v8.0 — ADMIN JS
+ * Fixes: Theme picker, Currency picker, Font selector, Display/Template add buttons
+ * New: Analytics, Playlists, Remote Control
  */
+'use strict';
 
 class MenuboardAdmin {
     constructor() {
@@ -10,75 +12,36 @@ class MenuboardAdmin {
         this.zones = [];
         this.templates = [];
         this.uploads = [];
+        this.displays = [];
+        this.playlists = [];
         this.settings = {};
-        this.displays = []; // v7.40: Multi-Display Support
         this.currentTab = 'dashboard';
         this.selectedZone = null;
         this.dragState = null;
         this.resizeState = null;
         this.history = [];
         this.historyIndex = -1;
-        this.maxHistory = 50;
-        this.canvasScale = 1;
         this.canvasZoom = 1;
         this.snapGrid = true;
         this.gridSize = 10;
-        this.currentTool = 'select';
-        this.editingTemplate = null; // v7.40: Template Editor State
-        this.editingDisplay = null;  // v7.40: Display Editor State
-
+        this.editingTemplate = null;
+        this.editingDisplay = null;
+        this.editingPlaylist = null;
+        this.playlistItems = [];
+        this.analyticsData = null;
         this.init();
     }
 
     async init() {
         await this.loadData();
-        this.setupMobileSidebar();
-        this.setupNavigation();
         this.setupEventListeners();
+        this.setupClock();
         this.renderAll();
-        this.startAutoRefresh();
+        this.switchTab('dashboard');
+        this.loadAnalytics();
     }
 
-    // ==================== MOBILE SIDEBAR ====================
-    setupMobileSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('mobileOverlay');
-        const toggle = document.getElementById('sidebarToggle');
-        const close = document.getElementById('sidebarClose');
-
-        const openSidebar = () => {
-            sidebar.classList.add('open');
-            overlay.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        };
-
-        const closeSidebar = () => {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
-            document.body.style.overflow = '';
-        };
-
-        toggle.addEventListener('click', openSidebar);
-        close.addEventListener('click', closeSidebar);
-        overlay.addEventListener('click', closeSidebar);
-
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', () => {
-                if (window.innerWidth <= 768) closeSidebar();
-            });
-        });
-
-        let touchStartX = 0;
-        sidebar.addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX;
-        });
-        sidebar.addEventListener('touchmove', (e) => {
-            const touchX = e.touches[0].clientX;
-            if (touchX - touchStartX < -50) closeSidebar();
-        });
-    }
-
-    // ==================== DATA LOADING ====================
+    // ═══ DATA ═══
     async loadData() {
         try {
             const res = await fetch('/data');
@@ -86,1217 +49,256 @@ class MenuboardAdmin {
             this.products = this.data.products || [];
             this.zones = this.data.zones || [];
             this.templates = this.data.templates || [];
+            this.displays = this.data.displays || [];
+            this.playlists = this.data.playlists || [];
             this.settings = this.data.settings || {};
-            this.displays = this.data.displays || []; // v7.40
-            this.updateSidebarCounts();
         } catch (e) {
-            this.showToast('Fehler beim Laden der Daten', 'error');
-            console.error(e);
+            this.showToast('Verbindungsfehler', 'error');
         }
     }
 
     async saveData() {
+        if (!this.data) return;
+        this.data.products = this.products;
+        this.data.zones = this.zones;
+        this.data.templates = this.templates;
+        this.data.displays = this.displays;
+        this.data.playlists = this.playlists;
+        this.data.settings = this.settings;
         try {
-            this.data.products = this.products;
-            this.data.zones = this.zones;
-            this.data.settings = this.settings;
-            this.data.templates = this.templates; // v7.40
-            this.data.displays = this.displays;   // v7.40
-            this.data.lastModified = new Date().toISOString();
-            if (!this.data.version) this.data.version = '7.40';
-
-            const res = await fetch('/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.data)
-            });
+            const res = await fetch('/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.data) });
             const result = await res.json();
-            if (result.success) {
-                this.showToast('Gespeichert!', 'success');
-                this.updateSidebarCounts();
-                this.refreshPreview();
-                return true;
-            }
-        } catch (e) {
-            this.showToast('Speichern fehlgeschlagen', 'error');
-        }
-        return false;
+            if (result.success) { this.showToast('Gespeichert!', 'success'); this.renderDashboard(); }
+            else this.showToast('Speicherfehler', 'error');
+        } catch (e) { this.showToast('Speicherfehler', 'error'); }
     }
 
-    // ==================== NAVIGATION ====================
-    setupNavigation() {
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const tab = item.dataset.tab;
-                this.switchTab(tab);
-            });
-        });
-
-        document.querySelectorAll('.quick-action').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const tab = item.dataset.tab;
-                this.switchTab(tab);
-            });
-        });
-    }
-
-    switchTab(tab) {
-        this.currentTab = tab;
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.tab === tab);
-        });
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.toggle('active', content.id === `tab-${tab}`);
-        });
-
-        const titles = {
-            dashboard: 'Dashboard',
-            products: 'Produkte',
-            zones: 'Zonen',
-            designer: 'Designer',
-            templates: 'Templates',
-            displays: 'Displays',
-            media: 'Mediathek',
-            schedules: 'Zeitpläne',
-            features: 'Features',
-            settings: 'Einstellungen'
-        };
-        document.getElementById('pageTitle').textContent = titles[tab] || tab;
-
-        if (tab === 'designer') {
-            setTimeout(() => this.renderDesigner(), 50);
-        } else if (tab === 'media') {
-            this.loadMedia();
-        } else if (tab === 'schedules') {
-            this.loadSchedules();
-        } else if (tab === 'features') {
-            this.renderWeatherSettings();
-            this.renderQRSettings();
-            this.renderLanguageSettings();
-            this.renderAnimationSettings();
-        }
-    }
-
-    // ==================== EVENT LISTENERS ====================
+    // ═══ EVENT LISTENERS ═══
     setupEventListeners() {
+        // Save
         document.getElementById('saveAllBtn').addEventListener('click', () => this.saveData());
 
+        // Nav tabs
+        document.querySelectorAll('.nav-item[data-tab]').forEach(el => {
+            el.addEventListener('click', e => { e.preventDefault(); this.switchTab(el.dataset.tab); });
+        });
+        document.getElementById('sidebarToggle').addEventListener('click', () => {
+            document.querySelector('.sidebar').classList.toggle('collapsed');
+        });
+
+        // Products
         document.getElementById('productSearch').addEventListener('input', () => this.renderProducts());
         document.getElementById('categoryFilter').addEventListener('change', () => this.renderProducts());
-
         document.getElementById('addProductBtn').addEventListener('click', () => this.openProductModal());
         document.getElementById('saveProductBtn').addEventListener('click', () => this.saveProduct());
-
-        // FIX: Better image upload handling - use the file input directly
-        const productImageUpload = document.getElementById('productImageUpload');
-        const productImageFile = document.getElementById('productImageFile');
-
-        if (productImageUpload && productImageFile) {
-            productImageUpload.addEventListener('click', (e) => {
-                // Only trigger if not clicking the URL input
-                if (e.target.id !== 'productImageUrl') {
-                    productImageFile.click();
+        const imgUpload = document.getElementById('productImageUpload');
+        const imgFile = document.getElementById('productImageFile');
+        if (imgUpload && imgFile) {
+            imgUpload.addEventListener('click', e => { if (e.target.id !== 'productImageUrl') imgFile.click(); });
+            imgFile.addEventListener('change', e => {
+                if (e.target.files?.[0]) {
+                    const reader = new FileReader();
+                    reader.onload = r => {
+                        document.getElementById('productImageUrl').value = '';
+                        document.getElementById('productImagePreview').innerHTML = `<img src="${r.target.result}">`;
+                        this.uploadImage(e.target.files[0]);
+                    };
+                    reader.readAsDataURL(e.target.files[0]);
                 }
             });
-
-            productImageFile.addEventListener('change', (e) => {
-                if (e.target.files && e.target.files[0]) {
-                    this.handleProductImageUpload(e);
-                }
+            document.getElementById('productImageUrl').addEventListener('input', e => {
+                if (e.target.value) document.getElementById('productImagePreview').innerHTML = `<img src="${e.target.value}" onerror="this.style.display='none'">`;
             });
         }
 
-        document.getElementById('addZoneBtn').addEventListener('click', () => this.openZoneModal());
-        document.getElementById('saveZoneBtn').addEventListener('click', () => this.saveZone());
-        document.getElementById('deleteZoneBtn').addEventListener('click', () => this.deleteZone());
+        // Displays
+        document.getElementById('addDisplayBtn').addEventListener('click', () => this.openDisplayModal());
+        document.getElementById('saveDisplayBtn').addEventListener('click', () => this.saveDisplay());
 
-        document.getElementById('zoneType').addEventListener('change', (e) => this.updateZoneFormFields(e.target.value));
+        // Templates
+        document.getElementById('addTemplateBtn').addEventListener('click', () => this.openTemplateModal());
+        document.getElementById('saveTemplateBtn').addEventListener('click', () => this.saveTemplate());
 
-        // Designer tools
-        document.getElementById('toolSelect').addEventListener('click', () => this.setTool('select'));
-        document.getElementById('toolAddMenu').addEventListener('click', () => this.addZoneFromTool('menu'));
-        document.getElementById('toolAddMedia').addEventListener('click', () => this.addZoneFromTool('media'));
-        document.getElementById('toolAddTicker').addEventListener('click', () => this.addZoneFromTool('ticker'));
-        document.getElementById('toolAddText').addEventListener('click', () => this.addZoneFromTool('text'));
-        document.getElementById('toolAddClock').addEventListener('click', () => this.addZoneFromTool('clock'));
-
-        document.getElementById('saveLayoutBtn').addEventListener('click', () => this.saveLayout());
-        document.getElementById('undoBtn').addEventListener('click', () => this.undo());
-        document.getElementById('redoBtn').addEventListener('click', () => this.redo());
-
-        // Zoom controls
-        document.getElementById('zoomIn').addEventListener('click', () => this.zoomCanvas(0.1));
-        document.getElementById('zoomOut').addEventListener('click', () => this.zoomCanvas(-0.1));
-        document.getElementById('zoomFit').addEventListener('click', () => this.fitCanvas());
-
-        // Grid controls
-        document.getElementById('showGrid').addEventListener('change', (e) => {
+        // Designer
+        ['zoomIn','zoomOut','zoomFit'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('click', () => {
+                if (id === 'zoomIn') this.zoomCanvas(0.1);
+                else if (id === 'zoomOut') this.zoomCanvas(-0.1);
+                else this.fitCanvas();
+            });
+        });
+        document.getElementById('showGrid')?.addEventListener('change', e => {
             document.getElementById('designerCanvas').classList.toggle('show-grid', e.target.checked);
         });
-        document.getElementById('snapGrid').addEventListener('change', (e) => {
-            this.snapGrid = e.target.checked;
+        document.getElementById('snapGrid')?.addEventListener('change', e => { this.snapGrid = e.target.checked; });
+        document.getElementById('gridSize')?.addEventListener('change', e => { this.gridSize = parseInt(e.target.value) || 10; });
+        document.getElementById('saveLayoutBtn')?.addEventListener('click', () => this.saveData());
+        document.getElementById('undoBtn')?.addEventListener('click', () => this.undo());
+        document.getElementById('redoBtn')?.addEventListener('click', () => this.redo());
+        ['toolSelect','toolAddMenu','toolAddMedia','toolAddTicker','toolAddText','toolAddClock'].forEach(id => {
+            document.getElementById(id)?.addEventListener('click', () => this.selectTool(id));
         });
-        document.getElementById('gridSize').addEventListener('change', (e) => {
-            this.gridSize = parseInt(e.target.value) || 10;
-        });
+
+        // Zone modal
+        document.getElementById('saveZoneBtn')?.addEventListener('click', () => this.saveZone());
+        document.getElementById('deleteZoneBtn')?.addEventListener('click', () => this.deleteSelectedZone());
+        document.getElementById('zoneType')?.addEventListener('change', e => this.updateZoneTypeUI(e.target.value));
 
         // Media
-        document.getElementById('mediaUpload').addEventListener('change', (e) => this.handleMediaUpload(e));
-
-        // Settings
-        document.getElementById('saveSettingsBtn').addEventListener('click', () => this.saveSettings());
-        document.getElementById('resetSettingsBtn').addEventListener('click', () => this.resetSettings());
-        document.getElementById('settingTickerSpeed').addEventListener('input', (e) => {
-            e.target.nextElementSibling.textContent = e.target.value;
-        });
+        document.getElementById('mediaUpload')?.addEventListener('change', e => this.handleMediaUpload(e));
 
         // Schedules
         document.getElementById('addScheduleBtn').addEventListener('click', () => this.openScheduleModal());
         document.getElementById('saveScheduleBtn').addEventListener('click', () => this.saveSchedule());
 
+        // Playlists
+        document.getElementById('addPlaylistBtn').addEventListener('click', () => this.openPlaylistModal());
+        document.getElementById('savePlaylistBtn').addEventListener('click', () => this.savePlaylist());
+
         // Features
         document.getElementById('saveFeaturesBtn').addEventListener('click', () => this.saveFeatures());
 
+        // Settings
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => this.saveSettings());
+        document.getElementById('resetSettingsBtn').addEventListener('click', () => this.resetSettings());
+        document.getElementById('settingTickerSpeed')?.addEventListener('input', e => {
+            const v = document.getElementById('tickerSpeedVal');
+            if (v) v.textContent = e.target.value;
+        });
+
+        // Theme picker
+        document.querySelectorAll('.theme-pill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.theme-pill').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('settingTheme').value = btn.dataset.theme;
+                document.getElementById('customThemeEditor').style.display = btn.dataset.theme === 'custom' ? 'block' : 'none';
+            });
+        });
+
+        // Color pickers live update
+        ['bgPrimary','bgSecondary','bgCard','accentPrimary','accentSecondary','textPrimary','textSecondary','priceColor','borderColor'].forEach(key => {
+            const inp = document.getElementById('ct-' + key);
+            const span = document.getElementById('ct-' + key + '-val');
+            if (inp && span) inp.addEventListener('input', () => { span.textContent = inp.value; });
+        });
+
+        // Font selector
+        this.renderFontSelector();
+
+        // Currency picker
+        this.renderCurrencyPicker();
+
         // Modal close
-        document.querySelectorAll('.modal-close, .modal-cancel, .modal-overlay').forEach(el => {
+        document.querySelectorAll('.modal-close, .modal-cancel, .modal-backdrop').forEach(el => {
             el.addEventListener('click', () => this.closeAllModals());
         });
-
-        // Keyboard
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 'z') { e.preventDefault(); this.undo(); }
-            if (e.ctrlKey && e.key === 'y') { e.preventDefault(); this.redo(); }
-            if (e.key === 'Delete' && this.selectedZone) { this.deleteSelectedZone(); }
-        });
-
-        // Window resize
-        window.addEventListener('resize', () => {
-            if (this.currentTab === 'designer') {
-                setTimeout(() => this.renderDesignerCanvas(), 100);
-            }
+        document.querySelectorAll('.modal').forEach(m => {
+            m.addEventListener('click', e => { if (e.target === m) this.closeAllModals(); });
         });
     }
 
-    // ==================== RENDERING ====================
+    // ═══ TAB SWITCHING ═══
+    switchTab(tab) {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === tab));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+        this.currentTab = tab;
+        const titles = { dashboard:'Dashboard', products:'Produkte', media:'Mediathek', displays:'Displays', templates:'Templates', designer:'Designer', playlists:'Playlisten', remote:'Fernsteuerung', schedules:'Zeitpläne', analytics:'Analytics', features:'Features', settings:'Einstellungen' };
+        document.getElementById('pageTitle').textContent = titles[tab] || tab;
+        if (tab === 'designer') setTimeout(() => this.renderDesignerCanvas(), 50);
+        else if (tab === 'media') this.loadMedia();
+        else if (tab === 'schedules') this.loadSchedules();
+        else if (tab === 'analytics') this.loadAnalytics();
+        else if (tab === 'remote') this.renderRemoteControl();
+        else if (tab === 'features') this.renderFeatureSettings();
+        else if (tab === 'settings') this.renderSettings();
+        else if (tab === 'playlists') this.renderPlaylists();
+        else if (tab === 'dashboard') this.renderDashboard();
+    }
+
     renderAll() {
-        this.renderDashboard();
         this.renderProducts();
-        this.renderZones();
+        this.renderDisplays();
         this.renderTemplates();
-        this.renderSettings();
+        this.renderPlaylists();
+        this.updateNavBadges();
     }
 
+    updateNavBadges() {
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        set('nb-products', this.products.length);
+        set('nb-displays', this.displays.length);
+        set('nb-templates', this.templates.length);
+        set('nb-playlists', this.playlists.length);
+    }
+
+    setupClock() {
+        const update = () => {
+            const now = new Date();
+            const el = document.getElementById('topbarTime');
+            if (el) el.textContent = now.toLocaleTimeString('de-DE');
+        };
+        update();
+        setInterval(update, 1000);
+    }
+
+    // ═══ DASHBOARD ═══
     renderDashboard() {
-        document.getElementById('dash-product-count').textContent = this.products.length;
-        document.getElementById('dash-zone-count').textContent = this.zones.length;
-        document.getElementById('dash-template-count').textContent = this.templates.length;
-        document.getElementById('last-modified').textContent = this.data?.lastModified 
-            ? new Date(this.data.lastModified).toLocaleString('de-DE')
-            : '-';
-        const themeNames = { dark: 'Dark Mode', light: 'Light Mode', burger: 'Burger Theme', coffee: 'Coffee Theme' };
-        document.getElementById('current-theme').textContent = themeNames[this.settings?.theme] || 'Dark Mode';
-    }
+        // Stat counts
+        const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        s('ds-products', this.products.length);
+        s('ds-displays', this.displays.length);
+        s('ds-templates', this.templates.length);
+        s('ds-playlists', this.playlists.length);
+        const onlineCount = this.displays.filter(d => {
+            if (!d.lastSeen) return false;
+            return (Date.now() - new Date(d.lastSeen).getTime()) < 5 * 60 * 1000;
+        }).length;
+        s('ds-online', onlineCount);
+        s('ds-views', this.analyticsData?.totalProductViews || '—');
+        s('ds-saved', this.data?.lastModified ? new Date(this.data.lastModified).toLocaleString('de-DE') : '—');
+        s('ds-theme', this.settings.theme || 'dark');
+        s('ds-currency', this.settings.currency || '€');
+        s('ds-lang', this.settings.language || 'de');
 
-    renderProducts() {
-        const grid = document.getElementById('productsGrid');
-        const search = document.getElementById('productSearch').value.toLowerCase();
-        const category = document.getElementById('categoryFilter').value;
-
-        let filtered = this.products;
-        if (search) {
-            filtered = filtered.filter(p => 
-                p.title.toLowerCase().includes(search) || 
-                p.category.toLowerCase().includes(search)
-            );
+        // Display status list
+        const dl = document.getElementById('ds-display-list');
+        if (dl) {
+            if (!this.displays.length) { dl.innerHTML = '<div class="empty-state" style="padding:20px"><i class="fas fa-desktop"></i><p>Keine Displays</p></div>'; }
+            else dl.innerHTML = this.displays.map(d => {
+                const online = d.lastSeen && (Date.now() - new Date(d.lastSeen).getTime()) < 5 * 60 * 1000;
+                const ago = d.lastSeen ? this.timeAgo(d.lastSeen) : 'Nie';
+                return `<div class="display-status-row">
+                    <span class="display-status-name"><i class="fas fa-circle" style="color:${online?'var(--green)':'var(--border)'}; font-size:8px; margin-right:6px;"></i>${d.name}</span>
+                    <span class="display-status-time">${ago}</span>
+                    <span class="display-online-badge ${online?'badge-online':'badge-offline'}">${online?'Online':'Offline'}</span>
+                </div>`;
+            }).join('');
         }
-        if (category) filtered = filtered.filter(p => p.category === category);
 
-        const currency = this.settings.currency || '€';
-
-        grid.innerHTML = filtered.map(product => {
-            const stockBadge = product.stockStatus === 'soldout' ? '<span class="product-badge stock-soldout">AUSVERKAUFT</span>' :
-                               product.stockStatus === 'low' ? '<span class="product-badge stock-low">WENIG</span>' : '';
-
-            return `
-            <div class="product-card" data-id="${product.id}">
-                <div class="product-image">
-                    ${product.image ? 
-                        `<img src="${product.image}" alt="${product.title}" onerror="this.parentElement.innerHTML='<div class=\'placeholder\'><i class=\'fas fa-utensils\'></i></div>'">` :
-                        `<div class="placeholder"><i class="fas fa-utensils"></i></div>`
-                    }
-                    ${product.badge && product.stockStatus !== 'soldout' ? `<span class="product-badge ${product.badge.toLowerCase()}">${product.badge}</span>` : ''}
-                    ${stockBadge}
-                </div>
-                <div class="product-info">
-                    <div class="product-category">${product.category}</div>
-                    <div class="product-title">${product.title}</div>
-                    <div class="product-price">${product.stockStatus === 'soldout' ? '—' : product.price + currency}</div>
-                </div>
-                <div class="product-actions">
-                    <button class="btn btn-outline btn-sm" onclick="admin.editProduct(${product.id})">
-                        <i class="fas fa-edit"></i> <span class="btn-text">Bearbeiten</span>
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="admin.deleteProduct(${product.id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `}).join('');
-
-        if (filtered.length === 0) {
-            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 50px; color: var(--text-muted);">
-                <i class="fas fa-search" style="font-size: 36px; margin-bottom: 12px;"></i>
-                <p>Keine Produkte gefunden</p>
-            </div>`;
-        }
-    }
-
-    renderZones() {
-        const list = document.getElementById('zonesList');
-        const iconMap = { menu: 'utensils', media: 'image', ticker: 'scroll', text: 'font', clock: 'clock' };
-
-        list.innerHTML = this.zones.map(zone => `
-            <div class="zone-item" data-id="${zone.id}">
-                <div class="zone-icon ${zone.type}">
-                    <i class="fas fa-${iconMap[zone.type] || 'square'}"></i>
-                </div>
-                <div class="zone-details">
-                    <h4>${zone.name}</h4>
-                    <p>${zone.type === 'menu' ? 'Menü Zone' : zone.type === 'media' ? 'Media Zone' : zone.type === 'ticker' ? 'Ticker Zone' : zone.type === 'text' ? 'Text Zone' : 'Uhr Zone'}</p>
-                    <div class="zone-meta">
-                        <span><i class="fas fa-arrows-alt"></i> ${zone.x}%, ${zone.y}%</span>
-                        <span><i class="fas fa-expand"></i> ${zone.w}x${zone.h}</span>
-                    </div>
-                </div>
-                <div class="zone-actions">
-                    <div class="zone-toggle ${zone.visible !== false ? 'active' : ''}" onclick="admin.toggleZoneVisibility('${zone.id}')"></div>
-                    <button class="btn btn-outline btn-sm" onclick="admin.editZone('${zone.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    renderTemplates() {
-        const grid = document.getElementById('templatesGrid');
-        grid.innerHTML = this.templates.map(template => `
-            <div class="template-card" onclick="admin.applyTemplate('${template.id}')">
-                <div class="template-preview">
-                    ${template.zones.map(z => `
-                        <div class="mini-zone" style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%;">
-                            ${z.type === 'menu' ? '🍔' : z.type === 'media' ? '🖼️' : z.type === 'ticker' ? '📜' : z.type === 'text' ? '📝' : '🕐'}
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="template-info">
-                    <h4>${template.name}</h4>
-                    <p>${template.description}</p>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    renderSettings() {
-        const s = this.settings;
-        document.getElementById('settingTheme').value = s.theme || 'dark';
-        document.getElementById('settingCurrency').value = s.currency || '€';
-        document.getElementById('settingLanguage').value = s.language || 'de';
-        document.getElementById('settingRefresh').value = s.refreshInterval || 30;
-        document.getElementById('settingAutoRotate').checked = s.autoRotate || false;
-        document.getElementById('settingShowBadges').checked = s.showBadges !== false;
-
-        // Font setting
-        const fontSelect = document.getElementById('settingFont');
-        if (fontSelect) fontSelect.value = s.font || 'Inter';
-
-        const ticker = this.data?.ticker || {};
-        document.getElementById('settingTickerEnabled').checked = ticker.enabled !== false;
-        document.getElementById('settingTickerSpeed').value = ticker.speed || 50;
-        document.getElementById('settingTickerSpeed').nextElementSibling.textContent = ticker.speed || 50;
-        document.getElementById('settingTickerColor').value = ticker.color || '#FFD700';
-        document.getElementById('settingTickerBg').value = ticker.backgroundColor || '#1a1a2e';
-    }
-
-    // ==================== PRODUCT MANAGEMENT ====================
-    openProductModal(product = null) {
-        const modal = document.getElementById('productModal');
-        const title = document.getElementById('productModalTitle');
-
-        if (product) {
-            title.textContent = 'Produkt bearbeiten';
-            document.getElementById('productId').value = product.id;
-            document.getElementById('productTitle').value = product.title;
-            document.getElementById('productPrice').value = product.price;
-            document.getElementById('productCategory').value = product.category;
-            document.getElementById('productBadge').value = product.badge || '';
-            document.getElementById('productDescription').value = product.description || '';
-            document.getElementById('productImageUrl').value = product.image || '';
-
-            // Stock status
-            const stockSelect = document.getElementById('productStock');
-            if (stockSelect) stockSelect.value = product.stockStatus || 'available';
-
-            const preview = document.getElementById('productImagePreview');
-            if (product.image) {
-                preview.innerHTML = `<img src="${product.image}" alt="${product.title}">`;
+        // Top products
+        const tp = document.getElementById('ds-top-products');
+        if (tp) {
+            const top = (this.analyticsData?.productRanking || []).slice(0, 5);
+            if (!top.length) { tp.innerHTML = '<div class="empty-state" style="padding:20px"><i class="fas fa-chart-bar"></i><p>Noch keine Daten</p></div>'; }
+            else {
+                const maxV = top[0]?.views || 1;
+                tp.innerHTML = top.map((p, i) => `<div class="top-product-row">
+                    <span class="top-rank">${i+1}</span>
+                    <span class="top-name">${p.name}</span>
+                    <div class="top-bar" style="width:60px"><div class="top-bar-fill" style="width:${Math.round(p.views/maxV*100)}%"></div></div>
+                    <span class="top-views">${p.views}</span>
+                </div>`).join('');
             }
-        } else {
-            title.textContent = 'Neues Produkt';
-            document.getElementById('productForm').reset();
-            document.getElementById('productId').value = '';
-            document.getElementById('productImagePreview').innerHTML = `
-                <i class="fas fa-image"></i>
-                <p>Bild hochladen oder URL eingeben</p>
-            `;
-            const stockSelect = document.getElementById('productStock');
-            if (stockSelect) stockSelect.value = 'available';
         }
 
-        modal.classList.add('active');
-    }
-
-    editProduct(id) {
-        const product = this.products.find(p => p.id === id);
-        if (product) this.openProductModal(product);
-    }
-
-    async saveProduct() {
-        const id = document.getElementById('productId').value;
-        const product = {
-            id: id ? parseInt(id) : Date.now(),
-            title: document.getElementById('productTitle').value,
-            price: document.getElementById('productPrice').value,
-            category: document.getElementById('productCategory').value,
-            badge: document.getElementById('productBadge').value,
-            description: document.getElementById('productDescription').value,
-            image: document.getElementById('productImageUrl').value || '/public/assets/placeholder.png',
-            stockStatus: document.getElementById('productStock')?.value || 'available'
-        };
-
-        if (id) {
-            const index = this.products.findIndex(p => p.id === parseInt(id));
-            if (index !== -1) this.products[index] = product;
-        } else {
-            this.products.push(product);
+        // Preview display select
+        const pds = document.getElementById('previewDisplaySelect');
+        if (pds) {
+            const current = pds.value;
+            pds.innerHTML = this.displays.map(d => `<option value="${d.slug}" ${d.slug === current ? 'selected' : ''}>${d.name}</option>`).join('');
         }
-
-        this.closeAllModals();
-        this.renderProducts();
-        this.saveData();
-    }
-
-    async deleteProduct(id) {
-        if (!confirm('Produkt wirklich löschen?')) return;
-        this.products = this.products.filter(p => p.id !== id);
-        this.renderProducts();
-        this.saveData();
-    }
-
-    async handleProductImageUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Show preview immediately
-        const preview = document.getElementById('productImagePreview');
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            preview.innerHTML = `<img src="${event.target.result}" alt="Preview">`;
-        };
-        reader.readAsDataURL(file);
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            this.showToast('Bild wird hochgeladen...', 'info');
-            const res = await fetch('/upload', { method: 'POST', body: formData });
-            const result = await res.json();
-            if (result.success) {
-                document.getElementById('productImageUrl').value = result.file.url;
-                preview.innerHTML = `<img src="${result.file.url}" alt="Preview">`;
-                this.showToast('Bild erfolgreich hochgeladen!', 'success');
-            } else {
-                this.showToast('Upload fehlgeschlagen: ' + (result.message || 'Unbekannter Fehler'), 'error');
-            }
-        } catch (err) {
-            this.showToast('Upload fehlgeschlagen: ' + err.message, 'error');
-            console.error('Upload error:', err);
-        }
-    }
-
-    // ==================== ZONE MANAGEMENT ====================
-    openZoneModal(zone = null) {
-        const modal = document.getElementById('zoneModal');
-        const title = document.getElementById('zoneModalTitle');
-
-        if (zone) {
-            title.textContent = 'Zone bearbeiten';
-            document.getElementById('zoneId').value = zone.id;
-            document.getElementById('zoneName').value = zone.name;
-            document.getElementById('zoneType').value = zone.type;
-            document.getElementById('zoneX').value = zone.x;
-            document.getElementById('zoneY').value = zone.y;
-            document.getElementById('zoneW').value = zone.w;
-            document.getElementById('zoneH').value = zone.h;
-            document.getElementById('zoneVisible').checked = zone.visible !== false;
-            document.getElementById('zoneMediaSrc').value = zone.mediaSrc || '';
-            document.getElementById('zoneMediaType').value = zone.mediaType || 'image';
-            document.getElementById('zoneTickerText').value = zone.text || '';
-            document.getElementById('zoneTextContent').value = zone.text || '';
-            document.getElementById('zoneTextSize').value = zone.textSize || 24;
-            document.getElementById('zoneTextColor').value = zone.textColor || '#ffffff';
-            document.getElementById('zoneTextAlign').value = zone.textAlign || 'left';
-
-            this.updateZoneFormFields(zone.type);
-
-            // Artikel-Builder
-            if (zone.articleStyle) {
-                const s = zone.articleStyle;
-                this.setToggleState('showImage', s.showImage !== false);
-                this.setToggleState('showTitle', s.showTitle !== false);
-                this.setToggleState('showPrice', s.showPrice !== false);
-                this.setToggleState('showDescription', s.showDescription || false);
-                this.setToggleState('showBadge', s.showBadge !== false);
-                this.setToggleState('showStock', s.showStock !== false);
-                document.getElementById('pricePosition').value = s.pricePosition || 'bottom-right';
-                document.getElementById('priceStyle').value = s.priceStyle || 'badge-gold';
-                document.getElementById('imageSize').value = s.imageSize || 'large';
-                document.getElementById('cardLayout').value = s.cardLayout || 'vertical';
-                document.getElementById('textAlign').value = s.textAlign || 'left';
-                document.getElementById('columnsCount').value = s.columnsCount || 'auto';
-            } else {
-                // Defaults
-                this.setToggleState('showImage', true);
-                this.setToggleState('showTitle', true);
-                this.setToggleState('showPrice', true);
-                this.setToggleState('showDescription', false);
-                this.setToggleState('showBadge', true);
-                this.setToggleState('showStock', true);
-                document.getElementById('pricePosition').value = 'bottom-right';
-                document.getElementById('priceStyle').value = 'badge-gold';
-                document.getElementById('imageSize').value = 'large';
-                document.getElementById('cardLayout').value = 'vertical';
-                document.getElementById('textAlign').value = 'left';
-                document.getElementById('columnsCount').value = 'auto';
-            }
-
-            this.renderZoneProductSelector(zone.productIds || []);
-        } else {
-            title.textContent = 'Neue Zone';
-            document.getElementById('zoneForm').reset();
-            document.getElementById('zoneId').value = '';
-            document.getElementById('zoneType').value = 'menu';
-            this.updateZoneFormFields('menu');
-            this.setToggleState('showImage', true);
-            this.setToggleState('showTitle', true);
-            this.setToggleState('showPrice', true);
-            this.setToggleState('showDescription', false);
-            this.setToggleState('showBadge', true);
-            this.setToggleState('showStock', true);
-            this.renderZoneProductSelector([]);
-        }
-
-        modal.classList.add('active');
-    }
-
-    // Helper to set toggle state visually
-    setToggleState(id, checked) {
-        const checkbox = document.getElementById(id);
-        if (checkbox) checkbox.checked = checked;
-    }
-
-    editZone(id) {
-        const zone = this.zones.find(z => z.id === id);
-        if (zone) this.openZoneModal(zone);
-    }
-
-    updateZoneFormFields(type) {
-        const groups = ['zoneArticlesGroup', 'zoneMediaGroup', 'zoneTickerGroup', 'zoneTextGroup'];
-        groups.forEach(g => document.getElementById(g).style.display = 'none');
-
-        if (type === 'menu') document.getElementById('zoneArticlesGroup').style.display = 'block';
-        else if (type === 'media') document.getElementById('zoneMediaGroup').style.display = 'block';
-        else if (type === 'ticker') document.getElementById('zoneTickerGroup').style.display = 'block';
-        else if (type === 'text') document.getElementById('zoneTextGroup').style.display = 'block';
-    }
-
-    renderZoneProductSelector(selectedIds = []) {
-        const container = document.getElementById('zoneProductSelector');
-        container.innerHTML = this.products.map(p => `
-            <label class="zone-product-item">
-                <input type="checkbox" value="${p.id}" ${selectedIds.includes(p.id) ? 'checked' : ''}>
-                <span>${p.title}</span>
-            </label>
-        `).join('');
-    }
-
-    async saveZone() {
-        const id = document.getElementById('zoneId').value;
-        const type = document.getElementById('zoneType').value;
-
-        const zone = {
-            id: id || 'zone-' + Date.now(),
-            name: document.getElementById('zoneName').value,
-            type: type,
-            x: parseFloat(document.getElementById('zoneX').value) || 0,
-            y: parseFloat(document.getElementById('zoneY').value) || 0,
-            w: parseFloat(document.getElementById('zoneW').value) || 20,
-            h: parseFloat(document.getElementById('zoneH').value) || 20,
-            visible: document.getElementById('zoneVisible').checked
-        };
-
-        if (type === 'menu') {
-            const checkboxes = document.querySelectorAll('#zoneProductSelector input:checked');
-            zone.productIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
-            // Artikel-Builder Settings
-            zone.articleStyle = {
-                showImage: document.getElementById('showImage').checked,
-                showTitle: document.getElementById('showTitle').checked,
-                showPrice: document.getElementById('showPrice').checked,
-                showDescription: document.getElementById('showDescription').checked,
-                showBadge: document.getElementById('showBadge').checked,
-                showStock: document.getElementById('showStock').checked,
-                pricePosition: document.getElementById('pricePosition').value,
-                priceStyle: document.getElementById('priceStyle').value,
-                imageSize: document.getElementById('imageSize').value,
-                cardLayout: document.getElementById('cardLayout').value,
-                textAlign: document.getElementById('textAlign').value,
-                columnsCount: document.getElementById('columnsCount').value
-            };
-        } else if (type === 'media') {
-            zone.mediaSrc = document.getElementById('zoneMediaSrc').value;
-            zone.mediaType = document.getElementById('zoneMediaType').value;
-        } else if (type === 'ticker') {
-            zone.text = document.getElementById('zoneTickerText').value;
-        } else if (type === 'text') {
-            zone.text = document.getElementById('zoneTextContent').value;
-            zone.textSize = parseInt(document.getElementById('zoneTextSize').value) || 24;
-            zone.textColor = document.getElementById('zoneTextColor').value;
-            zone.textAlign = document.getElementById('zoneTextAlign').value;
-        }
-
-        if (id) {
-            const index = this.zones.findIndex(z => z.id === id);
-            if (index !== -1) this.zones[index] = zone;
-        } else {
-            this.zones.push(zone);
-        }
-
-        this.closeAllModals();
-        this.renderZones();
-        this.saveData();
-        if (this.currentTab === 'designer') this.renderDesignerCanvas();
-    }
-
-    async deleteZone() {
-        const id = document.getElementById('zoneId').value;
-        if (!id || !confirm('Zone wirklich löschen?')) return;
-        this.zones = this.zones.filter(z => z.id !== id);
-        this.closeAllModals();
-        this.renderZones();
-        this.saveData();
-        if (this.currentTab === 'designer') this.renderDesignerCanvas();
-    }
-
-    async toggleZoneVisibility(id) {
-        const zone = this.zones.find(z => z.id === id);
-        if (zone) {
-            zone.visible = zone.visible === false ? true : false;
-            this.renderZones();
-            this.saveData();
-        }
-    }
-
-    // ==================== DESIGNER ====================
-    renderDesigner() {
-        this.renderDesignerCanvas();
-        this.renderTemplateButtons();
-        this.setupDesignerEvents();
-        this.fitCanvas();
-    }
-
-    renderDesignerCanvas() {
-        const canvas = document.getElementById('designerCanvas');
-        const layout = this.data?.layout || { width: 1920, height: 1080 };
-
-        canvas.style.width = layout.width + 'px';
-        canvas.style.height = layout.height + 'px';
-
-        canvas.innerHTML = '';
-
-        const iconMap = { menu: 'utensils', media: 'image', ticker: 'scroll', text: 'font', clock: 'clock' };
-        const previewMap = { menu: 'Menü', media: 'Media', ticker: 'Ticker', text: 'Text', clock: 'Uhr' };
-
-        this.zones.forEach((zone, index) => {
-            const el = document.createElement('div');
-            el.className = `canvas-zone ${zone.visible === false ? 'hidden' : ''} ${this.selectedZone === zone.id ? 'selected' : ''}`;
-            el.dataset.id = zone.id;
-            el.style.left = zone.x + '%';
-            el.style.top = zone.y + '%';
-            el.style.width = zone.w + '%';
-            el.style.height = zone.h + '%';
-
-            el.innerHTML = `
-                <div class="zone-header">
-                    <span>${zone.name}</span>
-                    <i class="fas fa-${iconMap[zone.type] || 'square'}"></i>
-                </div>
-                <div class="zone-content">
-                    <div class="zone-preview-text">
-                        <i class="fas fa-${iconMap[zone.type] || 'square'} zone-type-icon"></i><br>
-                        ${previewMap[zone.type] || 'Zone'}
-                    </div>
-                </div>
-                <div class="resize-handle nw" data-handle="nw"></div>
-                <div class="resize-handle ne" data-handle="ne"></div>
-                <div class="resize-handle sw" data-handle="sw"></div>
-                <div class="resize-handle se" data-handle="se"></div>
-                <div class="resize-handle n" data-handle="n"></div>
-                <div class="resize-handle s" data-handle="s"></div>
-                <div class="resize-handle w" data-handle="w"></div>
-                <div class="resize-handle e" data-handle="e"></div>
-            `;
-
-            canvas.appendChild(el);
-        });
-
-        document.getElementById('canvasSize').textContent = `${layout.width} x ${layout.height}`;
-    }
-
-    renderTemplateButtons() {
-        const container = document.getElementById('templateButtons');
-        container.innerHTML = this.templates.map(t => `
-            <button class="template-btn" onclick="admin.applyTemplate('${t.id}')">
-                <i class="fas fa-magic"></i>
-                <span>${t.name}</span>
-            </button>
-        `).join('');
-    }
-
-    // Canvas Zoom
-    zoomCanvas(delta) {
-        this.canvasZoom = Math.max(0.2, Math.min(3, this.canvasZoom + delta));
-        this.applyZoom();
-    }
-
-    fitCanvas() {
-        const canvas = document.getElementById('designerCanvas');
-        const wrapper = document.querySelector('.designer-canvas-outer');
-        const layout = this.data?.layout || { width: 1920, height: 1080 };
-
-        const padding = 40;
-        const availableW = wrapper.clientWidth - padding;
-        const availableH = wrapper.clientHeight - padding;
-
-        const scaleX = availableW / layout.width;
-        const scaleY = availableH / layout.height;
-        this.canvasZoom = Math.min(scaleX, scaleY, 1);
-
-        this.applyZoom();
-    }
-
-    applyZoom() {
-        const canvas = document.getElementById('designerCanvas');
-        canvas.style.transform = `scale(${this.canvasZoom})`;
-        document.getElementById('zoomLevel').textContent = Math.round(this.canvasZoom * 100) + '%';
-    }
-
-    setupDesignerEvents() {
-        const canvas = document.getElementById('designerCanvas');
-
-        canvas.addEventListener('mousedown', (e) => {
-            const zoneEl = e.target.closest('.canvas-zone');
-            const handle = e.target.closest('.resize-handle');
-
-            if (handle) {
-                const zoneId = handle.closest('.canvas-zone').dataset.id;
-                this.startResize(e, zoneId, handle.dataset.handle);
-            } else if (zoneEl) {
-                this.selectZone(zoneEl.dataset.id);
-                this.startDrag(e, zoneEl.dataset.id);
-            } else {
-                this.selectedZone = null;
-                this.renderDesignerCanvas();
-                this.updatePropertiesPanel();
-            }
-        });
-
-        canvas.addEventListener('touchstart', (e) => {
-            const touch = e.touches[0];
-            const zoneEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.canvas-zone');
-            if (zoneEl) {
-                this.selectZone(zoneEl.dataset.id);
-                this.startDrag({ clientX: touch.clientX, clientY: touch.clientY }, zoneEl.dataset.id);
-            }
-        }, { passive: false });
-
-        document.addEventListener('mousemove', (e) => {
-            if (this.dragState) this.handleDrag(e);
-            if (this.resizeState) this.handleResize(e);
-        });
-
-        document.addEventListener('touchmove', (e) => {
-            if (this.dragState) {
-                const touch = e.touches[0];
-                this.handleDrag({ clientX: touch.clientX, clientY: touch.clientY });
-            }
-        }, { passive: false });
-
-        document.addEventListener('mouseup', () => this.endInteraction());
-        document.addEventListener('touchend', () => this.endInteraction());
-    }
-
-    endInteraction() {
-        if (this.dragState || this.resizeState) {
-            this.pushHistory();
-        }
-        this.dragState = null;
-        this.resizeState = null;
-    }
-
-    selectZone(id) {
-        this.selectedZone = id;
-        this.renderDesignerCanvas();
-        this.updatePropertiesPanel();
-
-        const zone = this.zones.find(z => z.id === id);
-        document.getElementById('selectedZone').textContent = zone 
-            ? `${zone.name} (${zone.x}%, ${zone.y}% / ${zone.w}x${zone.h})` 
-            : 'Keine Zone ausgewählt';
-    }
-
-    updatePropertiesPanel() {
-        const panel = document.getElementById('propertiesPanel');
-        const zone = this.zones.find(z => z.id === this.selectedZone);
-
-        if (!zone) {
-            panel.innerHTML = '<p class="properties-empty">Wähle eine Zone aus</p>';
-            return;
-        }
-
-        panel.innerHTML = `
-            <div class="prop-row">
-                <label>Name</label>
-                <input type="text" value="${zone.name}" onchange="admin.updateZoneProp('${zone.id}', 'name', this.value)">
-            </div>
-            <div class="prop-row">
-                <label>Typ</label>
-                <select onchange="admin.updateZoneProp('${zone.id}', 'type', this.value)">
-                    <option value="menu" ${zone.type === 'menu' ? 'selected' : ''}>Menü</option>
-                    <option value="media" ${zone.type === 'media' ? 'selected' : ''}>Media</option>
-                    <option value="ticker" ${zone.type === 'ticker' ? 'selected' : ''}>Ticker</option>
-                    <option value="text" ${zone.type === 'text' ? 'selected' : ''}>Text</option>
-                    <option value="clock" ${zone.type === 'clock' ? 'selected' : ''}>Uhr</option>
-                </select>
-            </div>
-            <div class="prop-row">
-                <label>Position X (%)</label>
-                <input type="number" step="0.1" value="${zone.x}" onchange="admin.updateZoneProp('${zone.id}', 'x', parseFloat(this.value))">
-            </div>
-            <div class="prop-row">
-                <label>Position Y (%)</label>
-                <input type="number" step="0.1" value="${zone.y}" onchange="admin.updateZoneProp('${zone.id}', 'y', parseFloat(this.value))">
-            </div>
-            <div class="prop-row">
-                <label>Breite (%)</label>
-                <input type="number" step="0.1" value="${zone.w}" onchange="admin.updateZoneProp('${zone.id}', 'w', parseFloat(this.value))">
-            </div>
-            <div class="prop-row">
-                <label>Höhe (%)</label>
-                <input type="number" step="0.1" value="${zone.h}" onchange="admin.updateZoneProp('${zone.id}', 'h', parseFloat(this.value))">
-            </div>
-            <div class="prop-row">
-                <label class="toggle-switch">
-                    <input type="checkbox" ${zone.visible !== false ? 'checked' : ''} onchange="admin.updateZoneProp('${zone.id}', 'visible', this.checked)">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label">Sichtbar</span>
-                </label>
-            </div>
-            <button class="btn btn-danger btn-sm btn-block" onclick="admin.deleteSelectedZone()" style="margin-top:8px;">
-                <i class="fas fa-trash"></i> Zone löschen
-            </button>
-        `;
-    }
-
-    updateZoneProp(id, prop, value) {
-        const zone = this.zones.find(z => z.id === id);
-        if (zone) {
-            zone[prop] = value;
-            this.renderDesignerCanvas();
-            this.updatePropertiesPanel();
-        }
-    }
-
-    startDrag(e, zoneId) {
-        const zone = this.zones.find(z => z.id === zoneId);
-        if (!zone) return;
-
-        const canvas = document.getElementById('designerCanvas');
-        const rect = canvas.getBoundingClientRect();
-
-        this.dragState = {
-            zoneId,
-            startX: e.clientX,
-            startY: e.clientY,
-            startZoneX: zone.x,
-            startZoneY: zone.y,
-            canvasW: rect.width / this.canvasZoom,
-            canvasH: rect.height / this.canvasZoom
-        };
-    }
-
-    handleDrag(e) {
-        if (!this.dragState) return;
-
-        const ds = this.dragState;
-        const dx = ((e.clientX - ds.startX) / this.canvasZoom) / ds.canvasW * 100;
-        const dy = ((e.clientY - ds.startY) / this.canvasZoom) / ds.canvasH * 100;
-
-        let newX = ds.startZoneX + dx;
-        let newY = ds.startZoneY + dy;
-
-        const zone = this.zones.find(z => z.id === ds.zoneId);
-        if (!zone) return;
-
-        if (this.snapGrid) {
-            const gridSize = this.gridSize || 10;
-            newX = Math.round(newX / gridSize) * gridSize;
-            newY = Math.round(newY / gridSize) * gridSize;
-        }
-
-        newX = Math.max(0, Math.min(100 - zone.w, newX));
-        newY = Math.max(0, Math.min(100 - zone.h, newY));
-
-        zone.x = parseFloat(newX.toFixed(1));
-        zone.y = parseFloat(newY.toFixed(1));
-
-        this.renderDesignerCanvas();
-        this.updatePropertiesPanel();
-    }
-
-    startResize(e, zoneId, handle) {
-        const zone = this.zones.find(z => z.id === zoneId);
-        if (!zone) return;
-
-        const canvas = document.getElementById('designerCanvas');
-        const rect = canvas.getBoundingClientRect();
-
-        this.resizeState = {
-            zoneId,
-            handle,
-            startX: e.clientX,
-            startY: e.clientY,
-            startX_pct: zone.x,
-            startY_pct: zone.y,
-            startW: zone.w,
-            startH: zone.h,
-            canvasW: rect.width / this.canvasZoom,
-            canvasH: rect.height / this.canvasZoom
-        };
-    }
-
-    handleResize(e) {
-        if (!this.resizeState) return;
-
-        const rs = this.resizeState;
-        const dx = ((e.clientX - rs.startX) / this.canvasZoom) / rs.canvasW * 100;
-        const dy = ((e.clientY - rs.startY) / this.canvasZoom) / rs.canvasH * 100;
-
-        const zone = this.zones.find(z => z.id === rs.zoneId);
-        if (!zone) return;
-
-        const gridSize = this.gridSize || 10;
-
-        switch (rs.handle) {
-            case 'se':
-                zone.w = Math.max(5, Math.min(100 - zone.x, Math.round((rs.startW + dx) / gridSize) * gridSize));
-                zone.h = Math.max(5, Math.min(100 - zone.y, Math.round((rs.startH + dy) / gridSize) * gridSize));
-                break;
-            case 'nw':
-                zone.x = Math.max(0, Math.min(rs.startX_pct + rs.startW - 5, Math.round((rs.startX_pct + dx) / gridSize) * gridSize));
-                zone.y = Math.max(0, Math.min(rs.startY_pct + rs.startH - 5, Math.round((rs.startY_pct + dy) / gridSize) * gridSize));
-                zone.w = Math.max(5, Math.round((rs.startW - dx) / gridSize) * gridSize);
-                zone.h = Math.max(5, Math.round((rs.startH - dy) / gridSize) * gridSize);
-                break;
-            case 'ne':
-                zone.y = Math.max(0, Math.min(rs.startY_pct + rs.startH - 5, Math.round((rs.startY_pct + dy) / gridSize) * gridSize));
-                zone.w = Math.max(5, Math.min(100 - zone.x, Math.round((rs.startW + dx) / gridSize) * gridSize));
-                zone.h = Math.max(5, Math.round((rs.startH - dy) / gridSize) * gridSize);
-                break;
-            case 'sw':
-                zone.x = Math.max(0, Math.min(rs.startX_pct + rs.startW - 5, Math.round((rs.startX_pct + dx) / gridSize) * gridSize));
-                zone.w = Math.max(5, Math.round((rs.startW - dx) / gridSize) * gridSize);
-                zone.h = Math.max(5, Math.min(100 - zone.y, Math.round((rs.startH + dy) / gridSize) * gridSize));
-                break;
-            case 'e':
-                zone.w = Math.max(5, Math.min(100 - zone.x, Math.round((rs.startW + dx) / gridSize) * gridSize));
-                break;
-            case 'w':
-                zone.x = Math.max(0, Math.min(rs.startX_pct + rs.startW - 5, Math.round((rs.startX_pct + dx) / gridSize) * gridSize));
-                zone.w = Math.max(5, Math.round((rs.startW - dx) / gridSize) * gridSize);
-                break;
-            case 's':
-                zone.h = Math.max(5, Math.min(100 - zone.y, Math.round((rs.startH + dy) / gridSize) * gridSize));
-                break;
-            case 'n':
-                zone.y = Math.max(0, Math.min(rs.startY_pct + rs.startH - 5, Math.round((rs.startY_pct + dy) / gridSize) * gridSize));
-                zone.h = Math.max(5, Math.round((rs.startH - dy) / gridSize) * gridSize);
-                break;
-        }
-
-        this.renderDesignerCanvas();
-        this.updatePropertiesPanel();
-    }
-
-    setTool(tool) {
-        this.currentTool = tool;
-        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById(`tool${tool.charAt(0).toUpperCase() + tool.slice(1)}`)?.classList.add('active');
-    }
-
-    addZoneFromTool(type) {
-        this.pushHistory();
-
-        const names = { menu: 'Menü Zone', media: 'Media Zone', ticker: 'Ticker Zone', text: 'Text Zone', clock: 'Uhr Zone' };
-        const newZone = {
-            id: 'zone-' + Date.now(),
-            name: names[type] + ' ' + (this.zones.filter(z => z.type === type).length + 1),
-            type: type,
-            x: 10,
-            y: 10,
-            w: 30,
-            h: 30,
-            visible: true
-        };
-
-        if (type === 'menu') {
-            newZone.productIds = this.products.slice(0, 4).map(p => p.id);
-            newZone.articleStyle = {
-                showImage: true, showTitle: true, showPrice: true,
-                showDescription: false, showBadge: true, showStock: true,
-                pricePosition: 'bottom-right', priceStyle: 'badge-gold',
-                imageSize: 'large', cardLayout: 'vertical',
-                textAlign: 'left', columnsCount: 'auto'
-            };
-        } else if (type === 'media') {
-            newZone.mediaSrc = '/uploads/promo1.jpg';
-            newZone.mediaType = 'image';
-        } else if (type === 'ticker') {
-            newZone.text = '🍔 Willkommen!';
-        } else if (type === 'text') {
-            newZone.text = 'Neuer Text';
-            newZone.textSize = 24;
-            newZone.textColor = '#ffffff';
-            newZone.textAlign = 'left';
-        }
-
-        this.zones.push(newZone);
-        this.selectZone(newZone.id);
-        this.renderZones();
-    }
-
-    deleteSelectedZone() {
-        if (!this.selectedZone || !confirm('Zone wirklich löschen?')) return;
-        this.zones = this.zones.filter(z => z.id !== this.selectedZone);
-        this.selectedZone = null;
-        this.renderDesignerCanvas();
-        this.updatePropertiesPanel();
-        this.renderZones();
-    }
-
-    async applyTemplate(templateId) {
-        if (!confirm('Aktuelles Layout überschreiben?')) return;
-
-        try {
-            const res = await fetch('/apply-template', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ templateId })
-            });
-            const result = await res.json();
-            if (result.success) {
-                this.zones = result.zones;
-                this.pushHistory();
-                this.renderDesignerCanvas();
-                this.renderZones();
-                this.showToast('Template angewendet!', 'success');
-            }
-        } catch (e) {
-            this.showToast('Template konnte nicht angewendet werden', 'error');
-        }
-    }
-
-    async saveLayout() {
-        await this.saveData();
-    }
-
-    // ==================== HISTORY ====================
-    pushHistory() {
-        const snapshot = JSON.stringify(this.zones);
-        if (this.historyIndex >= 0 && this.history[this.historyIndex] === snapshot) return;
-
-        this.history = this.history.slice(0, this.historyIndex + 1);
-        this.history.push(snapshot);
-        if (this.history.length > this.maxHistory) this.history.shift();
-        this.historyIndex = this.history.length - 1;
-    }
-
-    undo() {
-        if (this.historyIndex > 0) {
-            this.historyIndex--;
-            this.zones = JSON.parse(this.history[this.historyIndex]);
-            this.renderDesignerCanvas();
-            this.renderZones();
-            this.showToast('Rückgängig', 'info');
-        }
-    }
-
-    redo() {
-        if (this.historyIndex < this.history.length - 1) {
-            this.historyIndex++;
-            this.zones = JSON.parse(this.history[this.historyIndex]);
-            this.renderDesignerCanvas();
-            this.renderZones();
-            this.showToast('Wiederholt', 'info');
-        }
-    }
-
-    // ==================== MEDIA ====================
-    async loadMedia() {
-        try {
-            const res = await fetch('/uploads-list');
-            const result = await res.json();
-            if (result.success) {
-                this.uploads = result.uploads;
-                this.renderMedia();
-                document.getElementById('dash-media-count').textContent = this.uploads.length;
-            }
-        } catch (e) {
-            console.error('Media load error:', e);
-        }
-    }
-
-    renderMedia() {
-        const grid = document.getElementById('mediaGrid');
-
-        grid.innerHTML = this.uploads.map(file => {
-            const isVideo = /\.(mp4|webm|mov)$/i.test(file.filename);
-            const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.filename);
-
-            return `
-                <div class="media-item">
-                    <div class="media-thumb">
-                        ${isImage ? `<img src="${file.url}" alt="${file.filename}">` :
-                          isVideo ? `<video src="${file.url}" muted></video>` :
-                          `<i class="fas fa-file media-icon"></i>`}
-                    </div>
-                    <div class="media-info">
-                        <p>${file.filename}</p>
-                        <span>${this.formatBytes(file.size)}</span>
-                    </div>
-                    <button class="media-delete" onclick="admin.deleteMedia('${file.filename}')">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-        }).join('');
-
-        if (this.uploads.length === 0) {
-            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 50px; color: var(--text-muted);">
-                <i class="fas fa-images" style="font-size: 36px; margin-bottom: 12px;"></i>
-                <p>Noch keine Medien hochgeladen</p>
-            </div>`;
-        }
-    }
-
-    async handleMediaUpload(e) {
-        const files = e.target.files;
-        if (!files.length) return;
-
-        const formData = new FormData();
-        for (let file of files) {
-            formData.append('files', file);
-        }
-
-        try {
-            const res = await fetch('/upload-multiple', { method: 'POST', body: formData });
-            const result = await res.json();
-            if (result.success) {
-                this.showToast(`${result.files.length} Dateien hochgeladen`, 'success');
-                this.loadMedia();
-            }
-        } catch (err) {
-            this.showToast('Upload fehlgeschlagen', 'error');
-        }
-    }
-
-    async deleteMedia(filename) {
-        if (!confirm('Datei wirklich löschen?')) return;
-        try {
-            const res = await fetch(`/uploads/${filename}`, { method: 'DELETE' });
-            const result = await res.json();
-            if (result.success) {
-                this.showToast('Datei gelöscht', 'success');
-                this.loadMedia();
-            }
-        } catch (e) {
-            this.showToast('Löschen fehlgeschlagen', 'error');
-        }
-    }
-
-    // ==================== SETTINGS ====================
-    async saveSettings() {
-        this.settings.theme = document.getElementById('settingTheme').value;
-        this.settings.currency = document.getElementById('settingCurrency').value;
-        this.settings.language = document.getElementById('settingLanguage').value;
-        this.settings.refreshInterval = parseInt(document.getElementById('settingRefresh').value);
-        this.settings.autoRotate = document.getElementById('settingAutoRotate').checked;
-        this.settings.showBadges = document.getElementById('settingShowBadges').checked;
-
-        // Font setting
-        const fontSelect = document.getElementById('settingFont');
-        if (fontSelect) this.settings.font = fontSelect.value;
-
-        this.data.ticker = {
-            enabled: document.getElementById('settingTickerEnabled').checked,
-            speed: parseInt(document.getElementById('settingTickerSpeed').value),
-            direction: 'left',
-            fontSize: 24,
-            color: document.getElementById('settingTickerColor').value,
-            backgroundColor: document.getElementById('settingTickerBg').value
-        };
-
-        const resVal = document.getElementById('settingResolution').value;
-        const [w, h] = resVal.split('x').map(Number);
-        this.data.layout = { ...this.data.layout, width: w, height: h };
-
-        await this.saveData();
-        this.renderDashboard();
-    }
-
-    resetSettings() {
-        if (!confirm('Alle Einstellungen auf Standard zurücksetzen?')) return;
-        this.settings = {
-            theme: 'dark', currency: '€', language: 'de',
-            refreshInterval: 30, autoRotate: false, showBadges: true,
-            font: 'Inter'
-        };
-        this.data.ticker = {
-            enabled: true, speed: 50, direction: 'left',
-            fontSize: 24, color: '#FFD700', backgroundColor: '#1a1a2e'
-        };
-        this.renderSettings();
-        this.saveData();
-    }
-
-    // ==================== UTILITIES ====================
-    updateSidebarCounts() {
-        document.getElementById('product-count').textContent = this.products.length;
-        document.getElementById('zone-count').textContent = this.zones.length;
     }
 
     refreshPreview() {
@@ -1304,437 +306,316 @@ class MenuboardAdmin {
         if (iframe) iframe.src = iframe.src;
     }
 
-    startAutoRefresh() {
-        setInterval(() => {
-            if (this.currentTab === 'dashboard') this.refreshPreview();
-        }, 30000);
+    updatePreview() {
+        const slug = document.getElementById('previewDisplaySelect').value;
+        const iframe = document.getElementById('livePreview');
+        if (iframe && slug) iframe.src = `/display/${slug}`;
     }
 
-    closeAllModals() {
-        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    timeAgo(ts) {
+        const sec = Math.round((Date.now() - new Date(ts).getTime()) / 1000);
+        if (sec < 60) return 'Gerade eben';
+        if (sec < 3600) return `vor ${Math.floor(sec/60)} Min.`;
+        if (sec < 86400) return `vor ${Math.floor(sec/3600)} Std.`;
+        return `vor ${Math.floor(sec/86400)} Tagen`;
     }
 
-    showToast(message, type = 'info') {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-
-        const icons = { success: 'check-circle', error: 'exclamation-circle', warning: 'exclamation-triangle', info: 'info-circle' };
-        toast.innerHTML = `<i class="fas fa-${icons[type]}"></i><span>${message}</span>`;
-
-        container.appendChild(toast);
-        setTimeout(() => toast.remove(), 3300);
-    }
-
-
-    // ==================== TEMPLATES CRUD (v7.40) ====================
-
-    async loadTemplates() {
-        try {
-            const res = await fetch('/templates');
-            this.templates = await res.json();
-            this.renderTemplates();
-            document.getElementById('dash-template-count').textContent = this.templates.length;
-        } catch (e) {
-            console.error('Template load error:', e);
+    // ═══ SETTINGS ═══
+    renderSettings() {
+        const s = this.settings;
+        // Theme
+        document.querySelectorAll('.theme-pill').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.theme === (s.theme || 'dark'));
+        });
+        document.getElementById('settingTheme').value = s.theme || 'dark';
+        if (s.theme === 'custom') document.getElementById('customThemeEditor').style.display = 'block';
+        if (s.customTheme) {
+            Object.entries(s.customTheme).forEach(([k, v]) => {
+                const inp = document.getElementById('ct-' + k);
+                const span = document.getElementById('ct-' + k + '-val');
+                if (inp) inp.value = v;
+                if (span) span.textContent = v;
+            });
         }
+        // Font
+        this.renderFontSelector(s.font || 'Inter');
+        document.getElementById('settingFont').value = s.font || 'Inter';
+        // Currency
+        this.renderCurrencyPicker(s.currency || '€');
+        document.getElementById('settingCurrency').value = s.currency || '€';
+        document.getElementById('settingCurrencyPosition').value = s.currencyPosition || 'after';
+        // General
+        document.getElementById('settingLanguage').value = s.language || 'de';
+        document.getElementById('settingRefresh').value = s.refreshInterval || 30;
+        document.getElementById('settingAutoRotate').checked = s.autoRotate || false;
+        document.getElementById('settingShowBadges').checked = s.showBadges !== false;
+        // Ticker
+        const t = this.data?.ticker || {};
+        document.getElementById('settingTickerEnabled').checked = t.enabled !== false;
+        document.getElementById('settingTickerSpeed').value = t.speed || 50;
+        const sv = document.getElementById('tickerSpeedVal'); if (sv) sv.textContent = t.speed || 50;
+        document.getElementById('settingTickerColor').value = t.color || '#FFD700';
+        document.getElementById('settingTickerBg').value = t.backgroundColor || '#1a1a2e';
     }
 
-    renderTemplates() {
-        const grid = document.getElementById('templatesGrid');
+    renderFontSelector(current = 'Inter') {
+        const fonts = [
+            { name: 'Inter', label: 'Inter (Modern)' },
+            { name: 'DM Sans', label: 'DM Sans (Clean)' },
+            { name: 'Roboto', label: 'Roboto (Google)' },
+            { name: 'Poppins', label: 'Poppins (Rund)' },
+            { name: 'Oswald', label: 'Oswald (Kondensiert)' },
+            { name: 'Playfair Display', label: 'Playfair (Elegant)' },
+            { name: 'Montserrat', label: 'Montserrat (Geometrisch)' },
+            { name: 'Raleway', label: 'Raleway (Leicht)' },
+            { name: 'Lato', label: 'Lato (Neutral)' },
+            { name: 'Nunito', label: 'Nunito (Freundlich)' }
+        ];
+        const el = document.getElementById('fontSelector');
+        if (!el) return;
+        el.innerHTML = fonts.map(f => `<div class="font-option ${f.name === current ? 'active' : ''}" data-font="${f.name}" style="font-family:'${f.name}',sans-serif">${f.label}</div>`).join('');
+        el.querySelectorAll('.font-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                el.querySelectorAll('.font-option').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                document.getElementById('settingFont').value = opt.dataset.font;
+                const prev = document.getElementById('fontPreview');
+                if (prev) prev.style.fontFamily = `'${opt.dataset.font}', sans-serif`;
+            });
+        });
+        const prev = document.getElementById('fontPreview');
+        if (prev) prev.style.fontFamily = `'${current}', sans-serif`;
+    }
+
+    renderCurrencyPicker(current = '€') {
+        const currencies = [
+            { symbol: '€', name: 'Euro' }, { symbol: '$', name: 'Dollar' },
+            { symbol: '£', name: 'Pfund' }, { symbol: '¥', name: 'Yen' },
+            { symbol: '₺', name: 'Lira' }, { symbol: 'CHF', name: 'Franken' },
+            { symbol: 'kr', name: 'Krone' }, { symbol: 'zł', name: 'Zloty' },
+            { symbol: 'Ft', name: 'Forint' }
+        ];
+        const el = document.getElementById('currencyPicker');
+        if (!el) return;
+        el.innerHTML = currencies.map(c => `<div class="currency-option ${c.symbol === current ? 'active' : ''}" data-currency="${c.symbol}">
+            <span class="curr-symbol">${c.symbol}</span><span class="curr-name">${c.name}</span>
+        </div>`).join('');
+        el.querySelectorAll('.currency-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                el.querySelectorAll('.currency-option').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                document.getElementById('settingCurrency').value = opt.dataset.currency;
+            });
+        });
+    }
+
+    saveSettings() {
+        const s = this.settings;
+        s.theme = document.getElementById('settingTheme').value;
+        s.font = document.getElementById('settingFont').value;
+        s.currency = document.getElementById('settingCurrency').value;
+        s.currencyPosition = document.getElementById('settingCurrencyPosition').value;
+        s.language = document.getElementById('settingLanguage').value;
+        s.refreshInterval = parseInt(document.getElementById('settingRefresh').value) || 30;
+        s.autoRotate = document.getElementById('settingAutoRotate').checked;
+        s.showBadges = document.getElementById('settingShowBadges').checked;
+        // Custom theme colors
+        if (s.theme === 'custom') {
+            s.customTheme = {};
+            ['bgPrimary','bgSecondary','bgCard','accentPrimary','accentSecondary','textPrimary','textSecondary','priceColor','borderColor'].forEach(k => {
+                const inp = document.getElementById('ct-' + k);
+                if (inp) s.customTheme[k] = inp.value;
+            });
+        }
+        // Ticker
+        if (!this.data.ticker) this.data.ticker = {};
+        this.data.ticker.enabled = document.getElementById('settingTickerEnabled').checked;
+        this.data.ticker.speed = parseInt(document.getElementById('settingTickerSpeed').value) || 50;
+        this.data.ticker.color = document.getElementById('settingTickerColor').value;
+        this.data.ticker.backgroundColor = document.getElementById('settingTickerBg').value;
+        this.saveData();
+    }
+
+    resetSettings() {
+        if (!confirm('Einstellungen zurücksetzen?')) return;
+        this.settings = { theme:'dark', currency:'€', currencyPosition:'after', language:'de', font:'Inter', refreshInterval:30, autoRotate:false, showBadges:true };
+        this.renderSettings();
+        this.showToast('Einstellungen zurückgesetzt', 'info');
+    }
+
+    // ═══ PRODUCTS ═══
+    renderProducts() {
+        const search = document.getElementById('productSearch').value.toLowerCase();
+        const cat = document.getElementById('categoryFilter').value;
+        const filtered = this.products.filter(p =>
+            (!cat || p.category === cat) &&
+            (!search || p.title.toLowerCase().includes(search) || (p.description||'').toLowerCase().includes(search))
+        );
+        const grid = document.getElementById('productsGrid');
         if (!grid) return;
-
-        grid.innerHTML = this.templates.map(template => {
-            const isDefault = template.isDefault;
-            const zoneCount = template.zones?.length || 0;
-
-            return `
-            <div class="template-card ${isDefault ? 'template-default' : 'template-custom'}" data-id="${template.id}">
-                <div class="template-preview">
-                    ${template.zones?.map(z => `
-                        <div class="mini-zone" style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%;">
-                            ${z.type === 'menu' ? '🍔' : z.type === 'media' ? '🖼️' : z.type === 'ticker' ? '📜' : z.type === 'text' ? '📝' : '🕐'}
-                        </div>
-                    `).join('') || ''}
-                    ${isDefault ? '<span class="template-default-badge">Standard</span>' : ''}
-                </div>
-                <div class="template-info">
-                    <h4>${template.name}</h4>
-                    <p>${template.description || ''}</p>
-                    <div class="template-meta">
-                        <span><i class="fas fa-th"></i> ${zoneCount} Zonen</span>
-                        <span><i class="fas fa-clock"></i> ${template.createdAt ? new Date(template.createdAt).toLocaleDateString('de-DE') : 'Standard'}</span>
-                    </div>
-                </div>
-                <div class="template-actions">
-                    <button class="btn btn-primary btn-sm" onclick="admin.applyTemplate('${template.id}')">
-                        <i class="fas fa-check"></i> Anwenden
-                    </button>
-                    <button class="btn btn-outline btn-sm" onclick="admin.editTemplate('${template.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    ${!isDefault ? `<button class="btn btn-danger btn-sm" onclick="admin.deleteTemplate('${template.id}')"><i class="fas fa-trash"></i></button>` : ''}
-                </div>
-            </div>
-        `}).join('');
-
-        if (this.templates.length === 0) {
-            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 50px; color: var(--text-muted);">
-                <i class="fas fa-layer-group" style="font-size: 36px; margin-bottom: 12px;"></i>
-                <p>Keine Templates vorhanden</p>
-            </div>`;
-        }
-    }
-
-    openTemplateModal(template = null) {
-        const modal = document.getElementById('templateModal');
-        const title = document.getElementById('templateModalTitle');
-
-        this.editingTemplate = template;
-
-        if (template) {
-            title.textContent = 'Template bearbeiten';
-            document.getElementById('templateId').value = template.id;
-            document.getElementById('templateName').value = template.name;
-            document.getElementById('templateDescription').value = template.description || '';
-            this.renderTemplateZoneEditor(template.zones || []);
-        } else {
-            title.textContent = 'Neues Template';
-            document.getElementById('templateForm').reset();
-            document.getElementById('templateId').value = '';
-            this.renderTemplateZoneEditor([]);
-        }
-
-        modal.classList.add('active');
-    }
-
-    editTemplate(id) {
-        const template = this.templates.find(t => t.id === id);
-        if (template) this.openTemplateModal(template);
-    }
-
-    async saveTemplate() {
-        const id = document.getElementById('templateId').value;
-        const template = {
-            id: id || 'template-' + Date.now(),
-            name: document.getElementById('templateName').value,
-            description: document.getElementById('templateDescription').value,
-            zones: this.getTemplateZonesFromEditor(),
-            isDefault: false
-        };
-
-        try {
-            if (id) {
-                // Update existing
-                const res = await fetch(`/templates/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(template)
-                });
-                const result = await res.json();
-                if (result.success) {
-                    const idx = this.templates.findIndex(t => t.id === id);
-                    if (idx !== -1) this.templates[idx] = result.template;
-                    this.showToast('Template aktualisiert!', 'success');
-                }
-            } else {
-                // Create new
-                const res = await fetch('/templates', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(template)
-                });
-                const result = await res.json();
-                if (result.success) {
-                    this.templates.push(result.template);
-                    this.showToast('Template erstellt!', 'success');
-                }
-            }
-            this.closeAllModals();
-            this.renderTemplates();
-            this.saveData();
-        } catch (e) {
-            this.showToast('Fehler beim Speichern des Templates', 'error');
-        }
-    }
-
-    async deleteTemplate(id) {
-        const template = this.templates.find(t => t.id === id);
-        if (template?.isDefault) {
-            this.showToast('Standard-Templates können nicht gelöscht werden', 'warning');
+        const currency = this.settings.currency || '€';
+        const cpos = this.settings.currencyPosition || 'after';
+        const fmtPrice = p => cpos === 'before' ? `${currency} ${p}` : `${p} ${currency}`;
+        if (!filtered.length) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-search"></i><p>Keine Produkte gefunden</p></div>`;
             return;
         }
-        if (!confirm('Template wirklich löschen?')) return;
-
-        try {
-            const res = await fetch(`/templates/${id}`, { method: 'DELETE' });
-            const result = await res.json();
-            if (result.success) {
-                this.templates = this.templates.filter(t => t.id !== id);
-                this.renderTemplates();
-                this.showToast('Template gelöscht', 'success');
-            }
-        } catch (e) {
-            this.showToast('Löschen fehlgeschlagen', 'error');
-        }
-    }
-
-    renderTemplateZoneEditor(zones) {
-        const container = document.getElementById('templateZoneEditor');
-        if (!container) return;
-
-        container.innerHTML = zones.map((z, i) => `
-            <div class="template-zone-item" data-index="${i}">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" class="tz-name" value="${z.name}" placeholder="Zonen-Name">
-                    </div>
-                    <div class="form-group">
-                        <label>Typ</label>
-                        <select class="tz-type">
-                            <option value="menu" ${z.type === 'menu' ? 'selected' : ''}>Menü</option>
-                            <option value="media" ${z.type === 'media' ? 'selected' : ''}>Media</option>
-                            <option value="ticker" ${z.type === 'ticker' ? 'selected' : ''}>Ticker</option>
-                            <option value="text" ${z.type === 'text' ? 'selected' : ''}>Text</option>
-                            <option value="clock" ${z.type === 'clock' ? 'selected' : ''}>Uhr</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>X (%)</label>
-                        <input type="number" class="tz-x" value="${z.x}" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>Y (%)</label>
-                        <input type="number" class="tz-y" value="${z.y}" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>W (%)</label>
-                        <input type="number" class="tz-w" value="${z.w}" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>H (%)</label>
-                        <input type="number" class="tz-h" value="${z.h}" step="0.1">
-                    </div>
-                </div>
-                <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.template-zone-item').remove()">
-                    <i class="fas fa-trash"></i> Zone entfernen
-                </button>
-            </div>
-        `).join('');
-    }
-
-    getTemplateZonesFromEditor() {
-        const items = document.querySelectorAll('#templateZoneEditor .template-zone-item');
-        return Array.from(items).map(item => ({
-            id: 'zone-' + Math.random().toString(36).substr(2, 9),
-            name: item.querySelector('.tz-name').value || 'Zone',
-            type: item.querySelector('.tz-type').value,
-            x: parseFloat(item.querySelector('.tz-x').value) || 0,
-            y: parseFloat(item.querySelector('.tz-y').value) || 0,
-            w: parseFloat(item.querySelector('.tz-w').value) || 20,
-            h: parseFloat(item.querySelector('.tz-h').value) || 20,
-            visible: true
-        }));
-    }
-
-    addTemplateZone() {
-        const container = document.getElementById('templateZoneEditor');
-        const index = container.querySelectorAll('.template-zone-item').length;
-        const div = document.createElement('div');
-        div.className = 'template-zone-item';
-        div.dataset.index = index;
-        div.innerHTML = `
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" class="tz-name" value="Neue Zone" placeholder="Zonen-Name">
-                </div>
-                <div class="form-group">
-                    <label>Typ</label>
-                    <select class="tz-type">
-                        <option value="menu">Menü</option>
-                        <option value="media">Media</option>
-                        <option value="ticker">Ticker</option>
-                        <option value="text">Text</option>
-                        <option value="clock">Uhr</option>
-                    </select>
+        grid.innerHTML = filtered.map(p => `
+        <div class="product-card" onclick="admin.openProductModal(${p.id})">
+            <div class="product-card-img">${p.image ? `<img src="${p.image}" alt="${p.title}" onerror="this.parentNode.innerHTML='<i class=fas fa-image no-img></i>'">` : '<i class="fas fa-image no-img"></i>'}</div>
+            <div class="product-card-body">
+                <div class="product-card-name" title="${p.title}">${p.title}</div>
+                <div class="product-card-cat">${p.category}</div>
+                <div class="product-card-footer">
+                    <span class="product-price">${p.stockStatus === 'soldout' ? '—' : fmtPrice(p.price)}</span>
+                    ${p.badge ? `<span class="product-badge">${p.badge}</span>` : `<span class="stock-available stock-${p.stockStatus||'available'}" title="${p.stockStatus||'available'}"></span>`}
                 </div>
             </div>
-            <div class="form-row">
-                <div class="form-group"><label>X (%)</label><input type="number" class="tz-x" value="10" step="0.1"></div>
-                <div class="form-group"><label>Y (%)</label><input type="number" class="tz-y" value="10" step="0.1"></div>
-                <div class="form-group"><label>W (%)</label><input type="number" class="tz-w" value="30" step="0.1"></div>
-                <div class="form-group"><label>H (%)</label><input type="number" class="tz-h" value="30" step="0.1"></div>
+            <div class="product-card-actions">
+                <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();admin.openProductModal(${p.id})"><i class="fas fa-pen"></i></button>
+                <button class="btn btn-danger btn-xs" onclick="event.stopPropagation();admin.deleteProduct(${p.id})"><i class="fas fa-trash"></i></button>
             </div>
-            <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.template-zone-item').remove()">
-                <i class="fas fa-trash"></i> Zone entfernen
-            </button>
-        `;
-        container.appendChild(div);
+        </div>`).join('');
     }
 
-    // ==================== MULTI-DISPLAY (v7.40) ====================
-
-    async loadDisplays() {
-        try {
-            const res = await fetch('/displays');
-            this.displays = await res.json();
-            this.renderDisplays();
-        } catch (e) {
-            console.error('Display load error:', e);
-        }
-    }
-
-    renderDisplays() {
-        const container = document.getElementById('displaysList');
-        if (!container) return;
-
-        container.innerHTML = this.displays.map(display => {
-            const template = this.templates.find(t => t.id === display.templateId);
-            const isOnline = display.lastSeen && (new Date() - new Date(display.lastSeen)) < 60000;
-
-            return `
-            <div class="display-card ${display.active ? '' : 'display-inactive'}" data-id="${display.id}">
-                <div class="display-header">
-                    <div class="display-status ${isOnline ? 'online' : 'offline'}"></div>
-                    <h4>${display.name}</h4>
-                    <span class="display-slug">/${display.slug}</span>
-                </div>
-                <div class="display-body">
-                    <p class="display-desc">${display.description || 'Keine Beschreibung'}</p>
-                    <div class="display-meta">
-                        <span><i class="fas fa-layer-group"></i> ${template?.name || 'Kein Template'}</span>
-                        <span><i class="fas fa-power-off"></i> ${display.active ? 'Aktiv' : 'Inaktiv'}</span>
-                    </div>
-                    <div class="display-url">
-                        <code>${window.location.origin}/display/${display.slug}</code>
-                        <button class="btn btn-sm btn-outline" onclick="admin.copyDisplayUrl('${display.slug}')">
-                            <i class="fas fa-copy"></i>
-                        </button>
-                        <a href="/display/${display.slug}" target="_blank" class="btn btn-sm btn-outline">
-                            <i class="fas fa-external-link-alt"></i>
-                        </a>
-                    </div>
-                </div>
-                <div class="display-actions">
-                    <button class="btn btn-outline btn-sm" onclick="admin.editDisplay('${display.id}')">
-                        <i class="fas fa-edit"></i> Bearbeiten
-                    </button>
-                    <button class="btn btn-outline btn-sm" onclick="admin.toggleDisplay('${display.id}')">
-                        <i class="fas fa-${display.active ? 'pause' : 'play'}"></i> ${display.active ? 'Deaktivieren' : 'Aktivieren'}
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="admin.deleteDisplay('${display.id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `}).join('');
-
-        if (this.displays.length === 0) {
-            container.innerHTML = `<div style="text-align: center; padding: 50px; color: var(--text-muted);">
-                <i class="fas fa-tv" style="font-size: 36px; margin-bottom: 12px;"></i>
-                <p>Keine Displays konfiguriert</p>
-            </div>`;
-        }
-
-        // Update dashboard count
-        const dashCount = document.getElementById('dash-display-count');
-        if (dashCount) dashCount.textContent = this.displays.length;
-    }
-
-    openDisplayModal(display = null) {
-        const modal = document.getElementById('displayModal');
-        const title = document.getElementById('displayModalTitle');
-
-        this.editingDisplay = display;
-
-        // Populate template select
-        const templateSelect = document.getElementById('displayTemplate');
-        if (templateSelect) {
-            templateSelect.innerHTML = this.templates.map(t => 
-                `<option value="${t.id}" ${display?.templateId === t.id ? 'selected' : ''}>${t.name}</option>`
-            ).join('');
-        }
-
-        if (display) {
-            title.textContent = 'Display bearbeiten';
-            document.getElementById('displayId').value = display.id;
-            document.getElementById('displayName').value = display.name;
-            document.getElementById('displaySlug').value = display.slug;
-            document.getElementById('displayDescription').value = display.description || '';
-            document.getElementById('displayActive').checked = display.active !== false;
-        } else {
-            title.textContent = 'Neues Display';
-            document.getElementById('displayForm').reset();
-            document.getElementById('displayId').value = '';
-            document.getElementById('displaySlug').value = 'display-' + (this.displays.length + 1);
-            document.getElementById('displayActive').checked = true;
-        }
-
+    openProductModal(idOrProduct = null) {
+        const modal = document.getElementById('productModal');
+        const product = typeof idOrProduct === 'number' ? this.products.find(p => p.id === idOrProduct) : null;
+        document.getElementById('productModalTitle').textContent = product ? 'Produkt bearbeiten' : 'Neues Produkt';
+        document.getElementById('productId').value = product?.id || '';
+        document.getElementById('productTitle').value = product?.title || '';
+        document.getElementById('productPrice').value = product?.price || '';
+        document.getElementById('productCategory').value = product?.category || 'burger';
+        document.getElementById('productBadge').value = product?.badge || '';
+        document.getElementById('productDescription').value = product?.description || '';
+        document.getElementById('productImageUrl').value = product?.image || '';
+        document.getElementById('productStock').value = product?.stockStatus || 'available';
+        document.getElementById('productImagePreview').innerHTML = product?.image
+            ? `<img src="${product.image}" alt="${product.title}">`
+            : '<i class="fas fa-image"></i><span>Klicken oder URL eingeben</span>';
         modal.classList.add('active');
     }
 
-    editDisplay(id) {
-        const display = this.displays.find(d => d.id === id);
-        if (display) this.openDisplayModal(display);
+    async saveProduct() {
+        const id = document.getElementById('productId').value;
+        const product = {
+            id: id ? parseInt(id) : Date.now(),
+            title: document.getElementById('productTitle').value.trim(),
+            price: document.getElementById('productPrice').value.trim(),
+            category: document.getElementById('productCategory').value,
+            badge: document.getElementById('productBadge').value,
+            description: document.getElementById('productDescription').value.trim(),
+            image: document.getElementById('productImageUrl').value.trim(),
+            stockStatus: document.getElementById('productStock').value
+        };
+        if (!product.title || !product.price) { this.showToast('Name und Preis sind pflicht!', 'error'); return; }
+        if (id) { const i = this.products.findIndex(p => p.id === parseInt(id)); if (i !== -1) this.products[i] = product; }
+        else this.products.push(product);
+        this.closeAllModals();
+        this.renderProducts();
+        this.updateNavBadges();
+        await this.saveData();
+    }
+
+    async deleteProduct(id) {
+        if (!confirm('Produkt wirklich löschen?')) return;
+        this.products = this.products.filter(p => p.id !== id);
+        this.renderProducts();
+        this.updateNavBadges();
+        await this.saveData();
+    }
+
+    async uploadImage(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch('/upload', { method: 'POST', body: formData });
+            const result = await res.json();
+            if (result.success) { document.getElementById('productImageUrl').value = result.file.url; this.showToast('Bild hochgeladen!', 'success'); }
+        } catch (e) { this.showToast('Upload fehlgeschlagen', 'error'); }
+    }
+
+    // ═══ DISPLAYS ═══
+    renderDisplays() {
+        const grid = document.getElementById('displaysGrid');
+        if (!grid) return;
+        if (!this.displays.length) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-desktop"></i><p>Noch keine Displays.<br>Klicke auf "+ Display"</p></div>`;
+            return;
+        }
+        grid.innerHTML = this.displays.map(d => {
+            const online = d.lastSeen && (Date.now() - new Date(d.lastSeen).getTime()) < 5 * 60 * 1000;
+            const tpl = this.templates.find(t => t.id === d.templateId);
+            return `<div class="display-card">
+                <div class="display-card-header">
+                    <div class="display-card-icon"><i class="fas fa-desktop"></i></div>
+                    <span class="display-online-badge ${online?'badge-online':'badge-offline'}">${online?'Online':'Offline'}</span>
+                </div>
+                <div class="display-card-name">${d.name}</div>
+                <div class="display-card-slug">/display/${d.slug}</div>
+                <div class="display-card-desc">${d.description || '—'}</div>
+                <div class="display-meta">
+                    <span><i class="fas fa-table-cells-large"></i> ${tpl?.name || d.templateId || '—'}</span>
+                    ${d.lastSeen ? `<span><i class="fas fa-clock"></i> ${this.timeAgo(d.lastSeen)}</span>` : ''}
+                </div>
+                <a class="display-url" href="/display/${d.slug}" target="_blank">/display/${d.slug}</a>
+                <div class="display-card-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="admin.openDisplayModal('${d.id}')"><i class="fas fa-pen"></i> Bearbeiten</button>
+                    <button class="btn btn-ghost btn-sm" onclick="window.open('/display/${d.slug}','_blank')"><i class="fas fa-external-link-alt"></i></button>
+                    <button class="btn btn-danger btn-sm" onclick="admin.deleteDisplay('${d.id}')"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    openDisplayModal(idOrNull = null) {
+        const modal = document.getElementById('displayModal');
+        const display = typeof idOrNull === 'string' ? this.displays.find(d => d.id === idOrNull) : null;
+        this.editingDisplay = display;
+        document.getElementById('displayModalTitle').textContent = display ? 'Display bearbeiten' : 'Neues Display';
+        document.getElementById('displayId').value = display?.id || '';
+        document.getElementById('displayName').value = display?.name || '';
+        document.getElementById('displaySlug').value = display?.slug || 'display-' + (this.displays.length + 1);
+        document.getElementById('displayDescription').value = display?.description || '';
+        document.getElementById('displayActive').checked = display?.active !== false;
+        // Populate template select
+        const tplSel = document.getElementById('displayTemplate');
+        tplSel.innerHTML = this.templates.map(t => `<option value="${t.id}" ${display?.templateId === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
+        // Populate playlist select
+        const plSel = document.getElementById('displayPlaylist');
+        plSel.innerHTML = '<option value="">Keine Playlist</option>' + this.playlists.map(pl => `<option value="${pl.id}" ${display?.playlistId === pl.id ? 'selected' : ''}>${pl.name}</option>`).join('');
+        modal.classList.add('active');
     }
 
     async saveDisplay() {
         const id = document.getElementById('displayId').value;
         const display = {
             id: id || 'display-' + Date.now(),
-            name: document.getElementById('displayName').value,
+            name: document.getElementById('displayName').value.trim(),
             slug: document.getElementById('displaySlug').value.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-            description: document.getElementById('displayDescription').value,
+            description: document.getElementById('displayDescription').value.trim(),
             templateId: document.getElementById('displayTemplate').value,
+            playlistId: document.getElementById('displayPlaylist').value || null,
             active: document.getElementById('displayActive').checked,
             playlist: [],
-            zones: [],
-            settings: {},
-            lastSeen: new Date().toISOString()
+            createdAt: id ? (this.displays.find(d => d.id === id)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+            lastSeen: id ? (this.displays.find(d => d.id === id)?.lastSeen || new Date().toISOString()) : new Date().toISOString()
         };
-
-        // Check slug uniqueness
-        const existing = this.displays.find(d => d.slug === display.slug && d.id !== id);
-        if (existing) {
-            this.showToast('Slug bereits vergeben!', 'error');
-            return;
-        }
-
+        if (!display.name) { this.showToast('Name ist pflicht!', 'error'); return; }
+        const slugTaken = this.displays.find(d => d.slug === display.slug && d.id !== id);
+        if (slugTaken) { this.showToast('Slug bereits vergeben!', 'error'); return; }
         try {
-            if (id) {
-                const res = await fetch(`/displays/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(display)
-                });
-                const result = await res.json();
-                if (result.success) {
-                    const idx = this.displays.findIndex(d => d.id === id);
-                    if (idx !== -1) this.displays[idx] = result.display;
-                    this.showToast('Display aktualisiert!', 'success');
-                }
-            } else {
-                const res = await fetch('/displays', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(display)
-                });
-                const result = await res.json();
-                if (result.success) {
-                    this.displays.push(result.display);
-                    this.showToast('Display erstellt!', 'success');
-                }
-            }
-            this.closeAllModals();
-            this.renderDisplays();
-            this.saveData();
-        } catch (e) {
-            this.showToast('Fehler beim Speichern des Displays', 'error');
-        }
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/displays/${id}` : '/displays';
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(display) });
+            const result = await res.json();
+            if (result.success) {
+                if (id) { const i = this.displays.findIndex(d => d.id === id); if (i !== -1) this.displays[i] = result.display; }
+                else this.displays.push(result.display);
+                this.closeAllModals(); this.renderDisplays(); this.updateNavBadges();
+                this.showToast(id ? 'Display aktualisiert!' : 'Display erstellt!', 'success');
+            } else this.showToast('Fehler', 'error');
+        } catch (e) { this.showToast('Verbindungsfehler', 'error'); }
     }
 
     async deleteDisplay(id) {
@@ -1742,376 +623,707 @@ class MenuboardAdmin {
         try {
             const res = await fetch(`/displays/${id}`, { method: 'DELETE' });
             const result = await res.json();
-            if (result.success) {
-                this.displays = this.displays.filter(d => d.id !== id);
-                this.renderDisplays();
-                this.showToast('Display gelöscht', 'success');
-            }
-        } catch (e) {
-            this.showToast('Löschen fehlgeschlagen', 'error');
-        }
+            if (result.success) { this.displays = this.displays.filter(d => d.id !== id); this.renderDisplays(); this.updateNavBadges(); this.showToast('Display gelöscht', 'success'); }
+        } catch (e) { this.showToast('Fehler', 'error'); }
     }
 
-    async toggleDisplay(id) {
-        const display = this.displays.find(d => d.id === id);
-        if (!display) return;
+    // ═══ TEMPLATES ═══
+    renderTemplates() {
+        const grid = document.getElementById('templatesGrid');
+        if (!grid) return;
+        if (!this.templates.length) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-table-cells-large"></i><p>Keine Templates vorhanden.</p></div>`;
+            return;
+        }
+        grid.innerHTML = this.templates.map(t => {
+            const preview = this.buildTemplatePreview(t);
+            return `<div class="template-card ${t.isDefault ? 'is-default' : ''}">
+                <div class="template-preview">${preview}</div>
+                <div class="template-card-body">
+                    <div class="template-card-name">${t.name} ${t.isDefault ? '<span class="template-default-badge">Standard</span>' : ''}</div>
+                    <div class="template-card-desc">${t.description || ''}</div>
+                    <div class="template-card-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="admin.applyTemplate('${t.id}')"><i class="fas fa-check"></i> Anwenden</button>
+                        <button class="btn btn-ghost btn-sm" onclick="admin.openTemplateModal('${t.id}')"><i class="fas fa-pen"></i></button>
+                        ${!t.isDefault ? `<button class="btn btn-danger btn-sm" onclick="admin.deleteTemplate('${t.id}')"><i class="fas fa-trash"></i></button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+        // Template pills in designer
+        const pills = document.getElementById('templateButtons');
+        if (pills) pills.innerHTML = this.templates.map(t => `<button class="template-pill-btn" onclick="admin.applyTemplate('${t.id}')">${t.name}</button>`).join('');
+    }
 
-        display.active = !display.active;
+    buildTemplatePreview(t) {
+        if (!t.zones?.length) return '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#444;font-size:12px;">Leer</div>';
+        return t.zones.map(z => `<div class="template-zone-preview" style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%">${z.type}</div>`).join('');
+    }
+
+    openTemplateModal(idOrNull = null) {
+        const modal = document.getElementById('templateModal');
+        const t = typeof idOrNull === 'string' ? this.templates.find(t => t.id === idOrNull) : null;
+        this.editingTemplate = t;
+        document.getElementById('templateModalTitle').textContent = t ? 'Template bearbeiten' : 'Neues Template';
+        document.getElementById('templateId').value = t?.id || '';
+        document.getElementById('templateName').value = t?.name || '';
+        document.getElementById('templateDescription').value = t?.description || '';
+        document.getElementById('templateZonesJson').value = t?.zones ? JSON.stringify(t.zones, null, 2) : '[]';
+        modal.classList.add('active');
+    }
+
+    copyCurrentLayoutToTemplate() {
+        const el = document.getElementById('templateZonesJson');
+        if (el) el.value = JSON.stringify(this.zones, null, 2);
+        this.showToast('Aktuelles Layout übernommen', 'info');
+    }
+
+    async saveTemplate() {
+        const id = document.getElementById('templateId').value;
+        const name = document.getElementById('templateName').value.trim();
+        if (!name) { this.showToast('Name ist pflicht!', 'error'); return; }
+        let zones = [];
+        try { zones = JSON.parse(document.getElementById('templateZonesJson').value || '[]'); }
+        catch (e) { this.showToast('Ungültiges JSON in Zones!', 'error'); return; }
+        const template = { id: id || 'template-' + Date.now(), name, description: document.getElementById('templateDescription').value.trim(), zones, isDefault: false };
+        if (id) { const i = this.templates.findIndex(t => t.id === id); if (i !== -1) { template.isDefault = this.templates[i].isDefault; this.templates[i] = template; } }
+        else this.templates.push(template);
         try {
-            const res = await fetch(`/displays/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(display)
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/templates/${id}` : '/templates';
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(template) });
+        } catch (e) {}
+        this.closeAllModals(); this.renderTemplates(); this.updateNavBadges();
+        this.showToast(id ? 'Template aktualisiert!' : 'Template erstellt!', 'success');
+    }
+
+    async deleteTemplate(id) {
+        if (!confirm('Template löschen?')) return;
+        this.templates = this.templates.filter(t => t.id !== id);
+        try { await fetch(`/templates/${id}`, { method: 'DELETE' }); } catch (e) {}
+        this.renderTemplates(); this.updateNavBadges(); this.showToast('Template gelöscht', 'success');
+    }
+
+    async applyTemplate(id) {
+        const t = this.templates.find(t => t.id === id);
+        if (!t) return;
+        if (!confirm(`Template "${t.name}" anwenden? Aktuelle Zonen werden ersetzt.`)) return;
+        this.zones = JSON.parse(JSON.stringify(t.zones));
+        this.renderDesignerCanvas();
+        await this.saveData();
+        this.showToast(`Template "${t.name}" angewendet!`, 'success');
+    }
+
+    // ═══ DESIGNER ═══
+    renderDesignerCanvas() {
+        const canvas = document.getElementById('designerCanvas');
+        if (!canvas) return;
+        const layout = this.data?.layout || { width: 1920, height: 1080 };
+        const wrapW = canvas.parentElement.clientWidth - 48;
+        const scale = Math.min(wrapW / layout.width, (canvas.parentElement.clientHeight - 48) / layout.height) * this.canvasZoom;
+        canvas.style.width = layout.width + 'px';
+        canvas.style.height = layout.height + 'px';
+        canvas.style.transform = `scale(${scale})`;
+        const infoBar = document.getElementById('canvasSize');
+        if (infoBar) infoBar.textContent = `${layout.width} × ${layout.height} | Zoom: ${Math.round(scale * 100)}%`;
+        canvas.innerHTML = this.zones.map(z => `
+        <div class="zone-card ${this.selectedZone?.id === z.id ? 'selected' : ''}"
+             style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%;display:${z.visible===false?'none':'flex'};flex-direction:column;"
+             data-zone-id="${z.id}"
+             onmousedown="admin.startDrag(event,'${z.id}')">
+            <div class="zone-card-header">
+                <span>${z.name || z.type}</span>
+                <span class="zone-card-type">${z.type.toUpperCase()}</span>
+            </div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(255,255,255,.3)">
+                ${z.type === 'menu' ? `🍽️ ${(z.productIds||[]).length} Produkte` : z.type === 'ticker' ? '📜 Ticker' : z.type === 'media' ? '🖼️ Media' : z.type === 'clock' ? '🕐 Uhr' : '📝 Text'}
+            </div>
+            <div class="zone-resize-handle" onmousedown="admin.startResize(event,'${z.id}')"></div>
+        </div>`).join('');
+        canvas.querySelectorAll('.zone-card').forEach(el => {
+            el.addEventListener('dblclick', () => this.openZoneModal(el.dataset.zoneId));
+            el.addEventListener('click', e => { e.stopPropagation(); this.selectZoneInDesigner(el.dataset.zoneId); });
+        });
+        canvas.addEventListener('click', () => { this.selectedZone = null; document.getElementById('selectedZone').textContent = 'Keine Zone'; document.querySelectorAll('.zone-card').forEach(el => el.classList.remove('selected')); });
+    }
+
+    selectZoneInDesigner(id) {
+        this.selectedZone = this.zones.find(z => z.id === id);
+        const name = this.selectedZone?.name || id;
+        document.getElementById('selectedZone').textContent = name;
+        document.querySelectorAll('.zone-card').forEach(el => el.classList.toggle('selected', el.dataset.zoneId === id));
+    }
+
+    startDrag(e, id) {
+        if (e.target.classList.contains('zone-resize-handle')) return;
+        e.preventDefault(); e.stopPropagation();
+        const canvas = document.getElementById('designerCanvas');
+        const zone = this.zones.find(z => z.id === id);
+        if (!zone) return;
+        this.selectZoneInDesigner(id);
+        const rect = canvas.getBoundingClientRect();
+        const scale = parseFloat(canvas.style.transform.replace('scale(','').replace(')','')) || 1;
+        const cw = canvas.offsetWidth * scale, ch = canvas.offsetHeight * scale;
+        const startX = e.clientX, startY = e.clientY;
+        const origX = zone.x, origY = zone.y;
+        const onMove = e => {
+            const dx = (e.clientX - startX) / cw * 100;
+            const dy = (e.clientY - startY) / ch * 100;
+            let newX = origX + dx, newY = origY + dy;
+            if (this.snapGrid) { const snap = this.gridSize / (canvas.offsetWidth / 100); newX = Math.round(newX / snap) * snap; newY = Math.round(newY / snap) * snap; }
+            zone.x = Math.max(0, Math.min(100 - zone.w, newX));
+            zone.y = Math.max(0, Math.min(100 - zone.h, newY));
+            this.renderDesignerCanvas();
+        };
+        const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    }
+
+    startResize(e, id) {
+        e.preventDefault(); e.stopPropagation();
+        const canvas = document.getElementById('designerCanvas');
+        const zone = this.zones.find(z => z.id === id);
+        if (!zone) return;
+        const scale = parseFloat(canvas.style.transform.replace('scale(','').replace(')','')) || 1;
+        const cw = canvas.offsetWidth * scale, ch = canvas.offsetHeight * scale;
+        const startX = e.clientX, startY = e.clientY;
+        const origW = zone.w, origH = zone.h;
+        const onMove = e => {
+            const dw = (e.clientX - startX) / cw * 100;
+            const dh = (e.clientY - startY) / ch * 100;
+            zone.w = Math.max(5, Math.min(100 - zone.x, origW + dw));
+            zone.h = Math.max(5, Math.min(100 - zone.y, origH + dh));
+            this.renderDesignerCanvas();
+        };
+        const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    }
+
+    selectTool(toolId) {
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(toolId)?.classList.add('active');
+        const types = { toolAddMenu:'menu', toolAddMedia:'media', toolAddTicker:'ticker', toolAddText:'text', toolAddClock:'clock' };
+        if (types[toolId]) this.addZone(types[toolId]);
+    }
+
+    addZone(type) {
+        const zone = { id: 'zone-' + Date.now(), name: type.charAt(0).toUpperCase() + type.slice(1) + ' Zone', type, x: 10, y: 10, w: 30, h: 20, visible: true, productIds: [], articleStyle: { showImage:true, showTitle:true, showPrice:true, showDescription:false, showBadge:true, showStock:true, pricePosition:'bottom-right', priceStyle:'badge-gold', imageSize:'large', cardLayout:'vertical', textAlign:'left', columnsCount:'auto' }, mediaSrc: '', text: '', tickerText: '' };
+        this.zones.push(zone);
+        this.renderDesignerCanvas();
+        this.showToast(`${type}-Zone hinzugefügt`, 'success');
+    }
+
+    openZoneModal(id) {
+        const modal = document.getElementById('zoneModal');
+        const zone = this.zones.find(z => z.id === id);
+        if (!zone) return;
+        this.selectedZone = zone;
+        document.getElementById('zoneModalTitle').textContent = 'Zone bearbeiten: ' + zone.name;
+        document.getElementById('zoneId').value = zone.id;
+        document.getElementById('zoneName').value = zone.name || '';
+        document.getElementById('zoneType').value = zone.type || 'menu';
+        document.getElementById('zoneX').value = parseFloat(zone.x).toFixed(1);
+        document.getElementById('zoneY').value = parseFloat(zone.y).toFixed(1);
+        document.getElementById('zoneW').value = parseFloat(zone.w).toFixed(1);
+        document.getElementById('zoneH').value = parseFloat(zone.h).toFixed(1);
+        document.getElementById('zoneVisible').checked = zone.visible !== false;
+        this.updateZoneTypeUI(zone.type, zone);
+        modal.classList.add('active');
+    }
+
+    updateZoneTypeUI(type, zone = null) {
+        ['Articles','Media','Ticker','Text'].forEach(g => {
+            const el = document.getElementById('zone' + g + 'Group');
+            if (el) el.style.display = 'none';
+        });
+        if (type === 'menu') {
+            document.getElementById('zoneArticlesGroup').style.display = 'block';
+            this.renderZoneProductSelector(zone);
+            const as = zone?.articleStyle || {};
+            ['showImage','showTitle','showPrice','showDescription','showBadge','showStock'].forEach(k => {
+                const el = document.getElementById(k); if (el) el.checked = as[k] !== false;
             });
-            const result = await res.json();
-            if (result.success) {
-                this.renderDisplays();
-                this.showToast(display.active ? 'Display aktiviert' : 'Display deaktiviert', 'success');
-            }
-        } catch (e) {
-            this.showToast('Fehler', 'error');
+            ['pricePosition','priceStyle','imageSize','cardLayout','textAlign','columnsCount'].forEach(k => {
+                const el = document.getElementById(k); if (el && as[k]) el.value = as[k];
+            });
+        } else if (type === 'media') {
+            document.getElementById('zoneMediaGroup').style.display = 'block';
+            if (zone) { document.getElementById('zoneMediaSrc').value = zone.mediaSrc || ''; document.getElementById('zoneMediaType').value = zone.mediaType || 'image'; }
+        } else if (type === 'ticker') {
+            document.getElementById('zoneTickerGroup').style.display = 'block';
+            if (zone) document.getElementById('zoneTickerText').value = zone.tickerText || zone.text || '';
+        } else if (type === 'text' || type === 'clock') {
+            document.getElementById('zoneTextGroup').style.display = 'block';
+            if (zone) { document.getElementById('zoneTextContent').value = zone.text || ''; document.getElementById('zoneTextSize').value = zone.fontSize || 24; document.getElementById('zoneTextColor').value = zone.color || '#ffffff'; document.getElementById('zoneTextAlign').value = zone.textAlign || 'center'; }
         }
     }
 
-    copyDisplayUrl(slug) {
-        const url = `${window.location.origin}/display/${slug}`;
-        navigator.clipboard.writeText(url).then(() => {
-            this.showToast('URL kopiert!', 'success');
-        }).catch(() => {
-            this.showToast('Kopieren fehlgeschlagen', 'error');
+    renderZoneProductSelector(zone = null) {
+        const sel = document.getElementById('zoneProductSelector');
+        if (!sel) return;
+        const selected = zone?.productIds || [];
+        sel.innerHTML = this.products.map(p => `<label class="zone-product-item ${selected.includes(p.id)?'selected':''}" data-pid="${p.id}">
+            <input type="checkbox" ${selected.includes(p.id)?'checked':''} value="${p.id}" style="display:none">
+            ${p.title}
+        </label>`).join('');
+        sel.querySelectorAll('.zone-product-item').forEach(el => {
+            el.addEventListener('click', () => { el.classList.toggle('selected'); el.querySelector('input').checked = el.classList.contains('selected'); });
         });
     }
 
-    // ==================== DASHBOARD UPDATE (v7.40) ====================
-
-    renderDashboard() {
-        document.getElementById('dash-product-count').textContent = this.products.length;
-        document.getElementById('dash-zone-count').textContent = this.zones.length;
-        document.getElementById('dash-template-count').textContent = this.templates.length;
-        const dashDisplayCount = document.getElementById('dash-display-count');
-        if (dashDisplayCount) dashDisplayCount.textContent = this.displays.length;
-        document.getElementById('last-modified').textContent = this.data?.lastModified 
-            ? new Date(this.data.lastModified).toLocaleString('de-DE')
-            : '-';
-        const themeNames = { dark: 'Dark Mode', light: 'Light Mode', burger: 'Burger Theme', coffee: 'Coffee Theme' };
-        document.getElementById('current-theme').textContent = themeNames[this.settings?.theme] || 'Dark Mode';
-
-        const versionEl = document.getElementById('dash-version');
-        if (versionEl) versionEl.textContent = this.data?.version || '7.40';
+    saveZone() {
+        const id = document.getElementById('zoneId').value;
+        const type = document.getElementById('zoneType').value;
+        const zone = this.zones.find(z => z.id === id);
+        if (!zone) return;
+        zone.name = document.getElementById('zoneName').value;
+        zone.type = type;
+        zone.x = parseFloat(document.getElementById('zoneX').value) || 0;
+        zone.y = parseFloat(document.getElementById('zoneY').value) || 0;
+        zone.w = parseFloat(document.getElementById('zoneW').value) || 20;
+        zone.h = parseFloat(document.getElementById('zoneH').value) || 20;
+        zone.visible = document.getElementById('zoneVisible').checked;
+        if (type === 'menu') {
+            zone.productIds = Array.from(document.querySelectorAll('.zone-product-item.selected')).map(el => parseInt(el.dataset.pid));
+            zone.articleStyle = { showImage: document.getElementById('showImage').checked, showTitle: document.getElementById('showTitle').checked, showPrice: document.getElementById('showPrice').checked, showDescription: document.getElementById('showDescription').checked, showBadge: document.getElementById('showBadge').checked, showStock: document.getElementById('showStock').checked, pricePosition: document.getElementById('pricePosition').value, priceStyle: document.getElementById('priceStyle').value, imageSize: document.getElementById('imageSize').value, cardLayout: document.getElementById('cardLayout').value, textAlign: document.getElementById('textAlign').value, columnsCount: document.getElementById('columnsCount').value };
+        } else if (type === 'media') {
+            zone.mediaSrc = document.getElementById('zoneMediaSrc').value;
+            zone.mediaType = document.getElementById('zoneMediaType').value;
+        } else if (type === 'ticker') {
+            zone.tickerText = document.getElementById('zoneTickerText').value;
+            zone.text = zone.tickerText;
+        } else if (type === 'text' || type === 'clock') {
+            zone.text = document.getElementById('zoneTextContent').value;
+            zone.fontSize = parseInt(document.getElementById('zoneTextSize').value) || 24;
+            zone.color = document.getElementById('zoneTextColor').value;
+            zone.textAlign = document.getElementById('zoneTextAlign').value;
+        }
+        this.closeAllModals();
+        this.renderDesignerCanvas();
+        this.showToast('Zone gespeichert', 'success');
     }
 
-    // ==================== FEATURE ADMIN UI (v7.50) ====================
+    deleteSelectedZone() {
+        const id = document.getElementById('zoneId').value;
+        if (!confirm('Zone löschen?')) return;
+        this.zones = this.zones.filter(z => z.id !== id);
+        this.closeAllModals();
+        this.renderDesignerCanvas();
+    }
 
-    // --- 1. TIME-BASED CONTENT ADMIN ---
+    zoomCanvas(delta) {
+        this.canvasZoom = Math.max(0.2, Math.min(2, this.canvasZoom + delta));
+        this.renderDesignerCanvas();
+    }
+    fitCanvas() { this.canvasZoom = 1; this.renderDesignerCanvas(); }
+    undo() { if (this.historyIndex > 0) { this.historyIndex--; this.zones = JSON.parse(this.history[this.historyIndex]); this.renderDesignerCanvas(); } }
+    redo() { if (this.historyIndex < this.history.length - 1) { this.historyIndex++; this.zones = JSON.parse(this.history[this.historyIndex]); this.renderDesignerCanvas(); } }
 
+    // ═══ MEDIA ═══
+    async loadMedia() {
+        try {
+            const res = await fetch('/uploads-list');
+            const data = await res.json();
+            this.uploads = data.uploads || [];
+            this.renderMedia();
+            const nb = document.getElementById('nb-media');
+            if (nb) nb.textContent = this.uploads.length;
+        } catch (e) {}
+    }
+
+    renderMedia() {
+        const grid = document.getElementById('mediaGrid');
+        if (!grid) return;
+        if (!this.uploads.length) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-photo-film"></i><p>Keine Medien hochgeladen</p></div>`;
+            return;
+        }
+        grid.innerHTML = this.uploads.map(f => {
+            const isVideo = /\.(mp4|webm|mov)$/i.test(f.filename);
+            const thumb = isVideo
+                ? `<div class="media-thumb"><i class="fas fa-video media-icon"></i></div>`
+                : `<div class="media-thumb"><img src="${f.url}" alt="${f.filename}" loading="lazy" onerror="this.parentNode.innerHTML='<i class=fas fa-image media-icon></i>'"></div>`;
+            return `<div class="media-card">
+                ${thumb}
+                <div class="media-info">
+                    <div class="media-name" title="${f.filename}">${f.filename}</div>
+                    <div class="media-size">${this.formatBytes(f.size)}</div>
+                </div>
+                <div style="padding:4px 8px 8px;display:flex;gap:4px;">
+                    <button class="btn btn-ghost btn-xs" onclick="navigator.clipboard.writeText('${f.url}');admin.showToast('URL kopiert!','success')"><i class="fas fa-copy"></i></button>
+                    <button class="btn btn-danger btn-xs" onclick="admin.deleteMedia('${f.filename}')"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async handleMediaUpload(e) {
+        const files = e.target.files;
+        if (!files?.length) return;
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const result = await res.json();
+                if (result.success) this.showToast(`${file.name} hochgeladen!`, 'success');
+            } catch (err) { this.showToast(`Fehler bei ${file.name}`, 'error'); }
+        }
+        await this.loadMedia();
+    }
+
+    async deleteMedia(filename) {
+        if (!confirm('Datei wirklich löschen?')) return;
+        try {
+            const res = await fetch(`/uploads/${filename}`, { method: 'DELETE' });
+            const result = await res.json();
+            if (result.success) { this.showToast('Datei gelöscht', 'success'); await this.loadMedia(); }
+        } catch (e) {}
+    }
+
+    formatBytes(b) {
+        if (!b) return '0 B';
+        const k = 1024, units = ['B','KB','MB','GB'];
+        const i = Math.floor(Math.log(b) / Math.log(k));
+        return parseFloat((b / Math.pow(k, i)).toFixed(1)) + ' ' + units[i];
+    }
+
+    // ═══ PLAYLISTS ═══
+    renderPlaylists() {
+        const grid = document.getElementById('playlistsGrid');
+        if (!grid) return;
+        if (!this.playlists.length) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-list-ol"></i><p>Noch keine Playlisten.<br>Klicke auf "+ Playlist"</p></div>`;
+            return;
+        }
+        grid.innerHTML = this.playlists.map(pl => `<div class="playlist-card">
+            <div class="playlist-card-header">
+                <div class="playlist-card-icon"><i class="fas fa-list-ol"></i></div>
+                <span class="playlist-type-badge">${pl.type === 'zone' ? 'Zonen-Playlist' : 'Display-Playlist'}</span>
+            </div>
+            <div class="display-card-name">${pl.name}</div>
+            <div class="display-card-desc">${pl.description || '—'}</div>
+            <div class="playlist-items-count"><i class="fas fa-layer-group"></i> ${(pl.items||[]).length} Elemente ${pl.loop ? '· Loop' : ''} ${pl.shuffle ? '· Shuffle' : ''}</div>
+            <div style="display:flex;gap:6px;margin-top:10px;">
+                <button class="btn btn-ghost btn-sm" onclick="admin.openPlaylistModal('${pl.id}')"><i class="fas fa-pen"></i> Bearbeiten</button>
+                <button class="btn btn-danger btn-sm" onclick="admin.deletePlaylist('${pl.id}')"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>`).join('');
+    }
+
+    openPlaylistModal(idOrNull = null) {
+        const modal = document.getElementById('playlistModal');
+        const pl = typeof idOrNull === 'string' ? this.playlists.find(p => p.id === idOrNull) : null;
+        this.editingPlaylist = pl;
+        this.playlistItems = pl ? JSON.parse(JSON.stringify(pl.items || [])) : [];
+        document.getElementById('playlistModalTitle').textContent = pl ? 'Playlist bearbeiten' : 'Neue Playlist';
+        document.getElementById('playlistId').value = pl?.id || '';
+        document.getElementById('playlistName').value = pl?.name || '';
+        document.getElementById('playlistDescription').value = pl?.description || '';
+        document.getElementById('playlistType').value = pl?.type || 'display';
+        document.getElementById('playlistLoop').checked = pl?.loop !== false;
+        document.getElementById('playlistShuffle').checked = pl?.shuffle || false;
+        this.renderPlaylistItemsEditor();
+        modal.classList.add('active');
+    }
+
+    renderPlaylistItemsEditor() {
+        const el = document.getElementById('playlistItemsEditor');
+        if (!el) return;
+        if (!this.playlistItems.length) {
+            el.innerHTML = '<div style="text-align:center;color:var(--text-3);font-size:13px;padding:20px;">Noch keine Elemente. Klicke auf "Element hinzufügen".</div>';
+            return;
+        }
+        el.innerHTML = this.playlistItems.map((item, i) => `<div class="playlist-item-row" data-idx="${i}">
+            <span class="playlist-item-handle"><i class="fas fa-grip-vertical"></i></span>
+            <div class="playlist-item-content">
+                <select onchange="admin.playlistItems[${i}].contentType=this.value">
+                    <option value="template" ${item.contentType==='template'?'selected':''}>Template</option>
+                    <option value="media" ${item.contentType==='media'?'selected':''}>Media</option>
+                    <option value="url" ${item.contentType==='url'?'selected':''}>URL</option>
+                </select>
+                <input type="text" value="${item.contentId||''}" placeholder="ID / URL / Dateiname" onchange="admin.playlistItems[${i}].contentId=this.value">
+                <input type="number" class="playlist-item-duration" value="${item.duration||10}" min="1" placeholder="Sekunden" title="Anzeigedauer in Sekunden" onchange="admin.playlistItems[${i}].duration=parseInt(this.value)||10">s
+            </div>
+            <button class="playlist-item-remove" onclick="admin.removePlaylistItem(${i})"><i class="fas fa-xmark"></i></button>
+        </div>`).join('');
+    }
+
+    addPlaylistItem() {
+        this.playlistItems.push({ contentType: 'template', contentId: '', duration: 10, order: this.playlistItems.length });
+        this.renderPlaylistItemsEditor();
+    }
+
+    removePlaylistItem(idx) {
+        this.playlistItems.splice(idx, 1);
+        this.renderPlaylistItemsEditor();
+    }
+
+    updatePlaylistTypeUI() {}
+
+    async savePlaylist() {
+        const id = document.getElementById('playlistId').value;
+        const pl = {
+            id: id || 'playlist-' + Date.now(),
+            name: document.getElementById('playlistName').value.trim(),
+            description: document.getElementById('playlistDescription').value.trim(),
+            type: document.getElementById('playlistType').value,
+            loop: document.getElementById('playlistLoop').checked,
+            shuffle: document.getElementById('playlistShuffle').checked,
+            items: this.playlistItems
+        };
+        if (!pl.name) { this.showToast('Name ist pflicht!', 'error'); return; }
+        if (id) { const i = this.playlists.findIndex(p => p.id === id); if (i !== -1) this.playlists[i] = pl; }
+        else this.playlists.push(pl);
+        try {
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/playlists/${id}` : '/playlists';
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pl) });
+        } catch (e) {}
+        this.closeAllModals(); this.renderPlaylists(); this.updateNavBadges();
+        this.showToast(id ? 'Playlist aktualisiert!' : 'Playlist erstellt!', 'success');
+    }
+
+    async deletePlaylist(id) {
+        if (!confirm('Playlist löschen?')) return;
+        this.playlists = this.playlists.filter(p => p.id !== id);
+        try { await fetch(`/playlists/${id}`, { method: 'DELETE' }); } catch (e) {}
+        this.renderPlaylists(); this.updateNavBadges(); this.showToast('Playlist gelöscht', 'success');
+    }
+
+    // ═══ REMOTE CONTROL ═══
+    renderRemoteControl() {
+        const el = document.getElementById('remoteDisplaysList');
+        if (!el) return;
+        if (!this.displays.length) { el.innerHTML = `<div class="empty-state"><i class="fas fa-desktop"></i><p>Keine Displays vorhanden</p></div>`; return; }
+        el.innerHTML = this.displays.map(d => {
+            const online = d.lastSeen && (Date.now() - new Date(d.lastSeen).getTime()) < 5 * 60 * 1000;
+            return `<div class="remote-display-card">
+                <div class="remote-display-title">
+                    <span><i class="fas fa-circle" style="color:${online?'var(--green)':'var(--border)'}; font-size:8px; margin-right:6px;"></i>${d.name}</span>
+                    <span class="display-online-badge ${online?'badge-online':'badge-offline'}">${online?'Online':'Offline'}</span>
+                </div>
+                <div class="remote-display-btns">
+                    <button class="remote-btn" onclick="admin.remoteCommand('${d.id}','reload')"><i class="fas fa-rotate"></i> Neu laden</button>
+                    <button class="remote-btn" onclick="admin.remoteCommand('${d.id}','next_template')"><i class="fas fa-forward-step"></i> Nächstes</button>
+                    <button class="remote-btn danger" onclick="admin.remoteCommand('${d.id}','blackout')"><i class="fas fa-moon"></i> Blackout</button>
+                    <button class="remote-btn" onclick="admin.remoteCommand('${d.id}','wake')"><i class="fas fa-sun"></i> Aufwecken</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async remoteCommand(displayId, command) {
+        const url = displayId === 'all' ? '/displays/broadcast' : `/displays/${displayId}/command`;
+        try {
+            await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command }) });
+            const displayName = displayId === 'all' ? 'Alle Displays' : (this.displays.find(d => d.id === displayId)?.name || displayId);
+            this.showToast(`"${command}" → ${displayName}`, 'success');
+        } catch (e) { this.showToast('Fernsteuerung fehlgeschlagen', 'error'); }
+    }
+
+    // ═══ SCHEDULES ═══
     async loadSchedules() {
         try {
             const res = await fetch('/schedule');
             const data = await res.json();
-            this.schedules = data.allSchedules || [];
-            this.renderSchedules();
-        } catch (e) {
-            console.error('Schedule load error:', e);
-        }
+            this.renderSchedules(data.allSchedules || [], data.activeSchedule);
+        } catch (e) { this.renderSchedules(this.data?.schedules || [], null); }
     }
 
-    renderSchedules() {
-        const container = document.getElementById('schedulesList');
-        if (!container) return;
-
-        container.innerHTML = this.schedules.map(s => {
-            const days = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-            const activeDays = s.days?.map(d => days[d]).join(', ') || 'Alle';
-            const isActive = s.active !== false;
-
-            return `
-            <div class="schedule-card ${isActive ? 'schedule-active' : 'schedule-inactive'}">
-                <div class="schedule-header">
-                    <h4>${s.name}</h4>
-                    <span class="schedule-badge">${s.badge || 'Plan'}</span>
+    renderSchedules(schedules, activeSchedule) {
+        const list = document.getElementById('schedulesList');
+        if (!list) return;
+        if (!schedules.length) { list.innerHTML = `<div class="empty-state"><i class="fas fa-clock"></i><p>Keine Zeitpläne. Klicke auf "+ Zeitplan"</p></div>`; return; }
+        const days = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+        list.innerHTML = schedules.map(s => {
+            const isNow = activeSchedule?.id === s.id;
+            const dayLabels = (s.days||[]).map(d => days[d]).join(', ');
+            return `<div class="schedule-card ${isNow ? 'is-active-now' : ''}">
+                <div class="schedule-active-dot" title="${isNow ? 'Aktuell aktiv' : 'Inaktiv'}"></div>
+                <div class="schedule-info">
+                    <div class="schedule-name">${s.name} ${isNow ? '<span class="schedule-tag" style="color:var(--green);background:var(--green-dim);border-color:rgba(34,211,164,.2)">🟢 Jetzt aktiv</span>' : ''}</div>
+                    <div class="schedule-desc">${s.description||''}</div>
+                    <div class="schedule-meta">
+                        <span class="schedule-tag time"><i class="fas fa-clock"></i> ${s.startTime}–${s.endTime}</span>
+                        <span class="schedule-tag">${dayLabels||'Keine Tage'}</span>
+                        ${s.badge ? `<span class="schedule-tag">${s.badge}</span>` : ''}
+                        <span class="schedule-tag">${s.theme||'dark'}</span>
+                    </div>
                 </div>
-                <p class="schedule-desc">${s.description || ''}</p>
-                <div class="schedule-meta">
-                    <span><i class="fas fa-clock"></i> ${s.startTime} - ${s.endTime}</span>
-                    <span><i class="fas fa-calendar"></i> ${activeDays}</span>
-                    <span><i class="fas fa-layer-group"></i> ${s.templateId || 'Standard'}</span>
+                <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+                    <label class="toggle schedule-toggle" title="Aktiv/Inaktiv">
+                        <input type="checkbox" ${s.active ? 'checked' : ''} onchange="admin.toggleSchedule('${s.id}',this.checked)">
+                        <span class="toggle-knob"></span>
+                    </label>
+                    <button class="btn btn-ghost btn-xs" onclick="admin.openScheduleModal('${s.id}')"><i class="fas fa-pen"></i></button>
+                    <button class="btn btn-danger btn-xs" onclick="admin.deleteSchedule('${s.id}')"><i class="fas fa-trash"></i></button>
                 </div>
-                <div class="schedule-actions">
-                    <button class="btn btn-outline btn-sm" onclick="admin.editSchedule('${s.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-outline btn-sm" onclick="admin.toggleSchedule('${s.id}')">
-                        <i class="fas fa-${isActive ? 'pause' : 'play'}"></i>
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="admin.deleteSchedule('${s.id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `}).join('');
+            </div>`;
+        }).join('');
     }
 
-    openScheduleModal(schedule = null) {
+    openScheduleModal(idOrNull = null) {
         const modal = document.getElementById('scheduleModal');
-        const title = document.getElementById('scheduleModalTitle');
-
-        this.editingSchedule = schedule;
-
-        if (schedule) {
-            title.textContent = 'Zeitplan bearbeiten';
-            document.getElementById('scheduleId').value = schedule.id;
-            document.getElementById('scheduleName').value = schedule.name;
-            document.getElementById('scheduleDescription').value = schedule.description || '';
-            document.getElementById('scheduleStart').value = schedule.startTime || '06:00';
-            document.getElementById('scheduleEnd').value = schedule.endTime || '11:00';
-            document.getElementById('scheduleTemplate').value = schedule.templateId || 'split';
-            document.getElementById('scheduleTicker').value = schedule.tickerText || '';
-            document.getElementById('scheduleTheme').value = schedule.theme || 'dark';
-            document.getElementById('scheduleBadge').value = schedule.badge || '';
-
-            // Check days
-            const dayCheckboxes = document.querySelectorAll('.schedule-day-check');
-            dayCheckboxes.forEach(cb => {
-                cb.checked = schedule.days?.includes(parseInt(cb.value)) || false;
-            });
-        } else {
-            title.textContent = 'Neuer Zeitplan';
-            document.getElementById('scheduleForm').reset();
-            document.getElementById('scheduleId').value = '';
-            document.getElementById('scheduleStart').value = '06:00';
-            document.getElementById('scheduleEnd').value = '11:00';
-        }
-
+        const s = typeof idOrNull === 'string' ? (this.data?.schedules||[]).find(s => s.id === idOrNull) : null;
+        document.getElementById('scheduleModalTitle').textContent = s ? 'Zeitplan bearbeiten' : 'Neuer Zeitplan';
+        document.getElementById('scheduleId').value = s?.id || '';
+        document.getElementById('scheduleName').value = s?.name || '';
+        document.getElementById('scheduleBadge').value = s?.badge || '';
+        document.getElementById('scheduleDescription').value = s?.description || '';
+        document.getElementById('scheduleStart').value = s?.startTime || '06:00';
+        document.getElementById('scheduleEnd').value = s?.endTime || '22:00';
+        document.getElementById('scheduleTheme').value = s?.theme || 'dark';
+        document.getElementById('scheduleTicker').value = s?.tickerText || '';
+        document.querySelectorAll('.schedule-day-check').forEach(cb => {
+            cb.checked = s?.days ? s.days.includes(parseInt(cb.value)) : [1,2,3,4,5].includes(parseInt(cb.value));
+        });
+        const tplSel = document.getElementById('scheduleTemplate');
+        tplSel.innerHTML = this.templates.map(t => `<option value="${t.id}" ${s?.templateId === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
+        if (s?.templateId) tplSel.value = s.templateId;
         modal.classList.add('active');
     }
 
     async saveSchedule() {
         const id = document.getElementById('scheduleId').value;
-        const dayCheckboxes = document.querySelectorAll('.schedule-day-check:checked');
-        const days = Array.from(dayCheckboxes).map(cb => parseInt(cb.value));
-
-        const schedule = {
+        const s = {
             id: id || 'schedule-' + Date.now(),
-            name: document.getElementById('scheduleName').value,
-            description: document.getElementById('scheduleDescription').value,
+            name: document.getElementById('scheduleName').value.trim(),
+            badge: document.getElementById('scheduleBadge').value.trim(),
+            description: document.getElementById('scheduleDescription').value.trim(),
             startTime: document.getElementById('scheduleStart').value,
             endTime: document.getElementById('scheduleEnd').value,
-            days: days.length > 0 ? days : [0,1,2,3,4,5,6],
+            days: Array.from(document.querySelectorAll('.schedule-day-check:checked')).map(cb => parseInt(cb.value)),
             templateId: document.getElementById('scheduleTemplate').value,
-            tickerText: document.getElementById('scheduleTicker').value,
             theme: document.getElementById('scheduleTheme').value,
-            badge: document.getElementById('scheduleBadge').value,
+            tickerText: document.getElementById('scheduleTicker').value.trim(),
             active: true
         };
-
-        try {
-            const res = await fetch('/schedules', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ schedules: this.schedules.map(s => s.id === (id || schedule.id) ? schedule : s) })
-            });
-            const result = await res.json();
-            if (result.success) {
-                this.schedules = result.schedules;
-                this.renderSchedules();
-                this.showToast('Zeitplan gespeichert!', 'success');
-                this.closeAllModals();
-            }
-        } catch (e) {
-            this.showToast('Fehler beim Speichern', 'error');
-        }
-    }
-
-    async toggleSchedule(id) {
-        const schedule = this.schedules.find(s => s.id === id);
-        if (!schedule) return;
-        schedule.active = !schedule.active;
-        await this.saveAllSchedules();
+        if (!s.name) { this.showToast('Name ist pflicht!', 'error'); return; }
+        if (!this.data.schedules) this.data.schedules = [];
+        if (id) { const i = this.data.schedules.findIndex(x => x.id === id); if (i !== -1) this.data.schedules[i] = s; }
+        else this.data.schedules.push(s);
+        await fetch('/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedules: this.data.schedules }) });
+        this.closeAllModals();
+        this.loadSchedules();
+        this.showToast('Zeitplan gespeichert!', 'success');
     }
 
     async deleteSchedule(id) {
-        if (!confirm('Zeitplan wirklich löschen?')) return;
-        this.schedules = this.schedules.filter(s => s.id !== id);
-        await this.saveAllSchedules();
+        if (!confirm('Zeitplan löschen?')) return;
+        this.data.schedules = (this.data.schedules||[]).filter(s => s.id !== id);
+        await fetch('/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedules: this.data.schedules }) });
+        this.loadSchedules();
+        this.showToast('Zeitplan gelöscht', 'success');
     }
 
-    async saveAllSchedules() {
+    async toggleSchedule(id, active) {
+        const s = (this.data?.schedules||[]).find(s => s.id === id);
+        if (s) s.active = active;
+        await fetch('/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedules: this.data.schedules }) });
+    }
+
+    // ═══ ANALYTICS ═══
+    async loadAnalytics() {
         try {
-            const res = await fetch('/schedules', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ schedules: this.schedules })
-            });
-            const result = await res.json();
-            if (result.success) {
-                this.schedules = result.schedules;
-                this.renderSchedules();
-                this.showToast('Zeitpläne aktualisiert!', 'success');
-            }
-        } catch (e) {
-            this.showToast('Fehler', 'error');
+            const res = await fetch('/analytics');
+            this.analyticsData = await res.json();
+            if (this.currentTab === 'analytics') this.renderAnalytics();
+            if (this.currentTab === 'dashboard') this.renderDashboard();
+        } catch (e) {}
+    }
+
+    renderAnalytics() {
+        const a = this.analyticsData;
+        if (!a) return;
+        // Product ranking
+        const pr = document.getElementById('analyticsProductRanking');
+        if (pr) {
+            const top = (a.productRanking || []).slice(0, 10);
+            if (!top.length) { pr.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fas fa-chart-bar"></i><p>Noch keine Daten</p></div>`; }
+            else pr.innerHTML = top.map((p, i) => `<div class="analytics-row">
+                <span class="analytics-rank">${i+1}</span>
+                <span class="analytics-name">${p.name}</span>
+                <span class="analytics-cat">${p.category}</span>
+                <span class="analytics-views">${p.views}</span>
+            </div>`).join('');
+        }
+        // 7 days chart
+        const d7 = document.getElementById('analytics7Days');
+        if (d7 && a.last7Days) {
+            const max = Math.max(...a.last7Days.map(d => d.views), 1);
+            d7.innerHTML = `<div class="chart-bars">${a.last7Days.map(d => `<div class="chart-bar-wrap">
+                <div class="chart-bar" style="height:${Math.round(d.views/max*100)}px" title="${d.views} Aufrufe"></div>
+            </div>`).join('')}</div>
+            <div class="chart-x-labels">${a.last7Days.map(d => `<span class="chart-x-label">${d.date.slice(5)}</span>`).join('')}</div>`;
+        }
+        // Hourly chart
+        const ho = document.getElementById('analyticsHourly');
+        if (ho && a.hourlyToday) {
+            const max = Math.max(...a.hourlyToday.map(h => h.views), 1);
+            ho.innerHTML = `<div class="chart-bars">${a.hourlyToday.map(h => `<div class="chart-bar-wrap">
+                <div class="chart-bar" style="height:${Math.round(h.views/max*100)}px" title="${h.hour}:00 – ${h.views} Aufrufe"></div>
+            </div>`).join('')}</div>
+            <div class="chart-x-labels">${a.hourlyToday.filter((_,i) => i % 4 === 0).map(h => `<span class="chart-x-label" style="flex:4">${h.hour}h</span>`).join('')}</div>`;
+        }
+        // Display views
+        const dv = document.getElementById('analyticsDisplays');
+        if (dv) {
+            const entries = Object.entries(a.displayViews || {});
+            if (!entries.length) { dv.innerHTML = '<div class="empty-state" style="padding:20px"><i class="fas fa-desktop"></i><p>Noch keine Daten</p></div>'; }
+            else dv.innerHTML = entries.map(([id, views]) => {
+                const d = this.displays.find(d => d.id === id);
+                return `<div class="analytics-row"><span class="analytics-name">${d?.name || id}</span><span class="analytics-views">${views}</span></div>`;
+            }).join('');
         }
     }
 
-    // --- 2. WEATHER SETTINGS ---
-
-    renderWeatherSettings() {
-        const weather = this.data?.weather || {};
-        const container = document.getElementById('weatherSettings');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="setting-row">
-                <label>Wetter anzeigen</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="weatherEnabled" ${weather.enabled !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Breitengrad</label>
-                    <input type="text" id="weatherLat" value="${weather.latitude || '52.52'}">
-                </div>
-                <div class="form-group">
-                    <label>Längengrad</label>
-                    <input type="text" id="weatherLon" value="${weather.longitude || '13.41'}">
-                </div>
-            </div>
-            <div class="setting-row">
-                <label>Empfehlungen anzeigen</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="weatherRecommendations" ${weather.showRecommendations !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        `;
+    async resetAnalytics() {
+        if (!confirm('Analytics-Daten wirklich löschen?')) return;
+        await fetch('/analytics/reset', { method: 'DELETE' });
+        await this.loadAnalytics();
+        this.showToast('Analytics zurückgesetzt', 'success');
     }
 
-    // --- 3. QR CODE SETTINGS ---
+    // ═══ FEATURES ═══
+    renderFeatureSettings() {
+        const d = this.data || {};
+        const w = d.weather || {};
+        document.getElementById('weatherSettings').innerHTML = `
+            <div class="setting-row"><label>Wetter aktiv</label><label class="toggle"><input type="checkbox" id="weatherEnabled" ${w.enabled!==false?'checked':''}><span class="toggle-knob"></span></label></div>
+            <div class="form-group" style="margin-top:10px"><label>Breitengrad</label><input type="text" id="weatherLat" value="${w.latitude||'52.52'}"></div>
+            <div class="form-group"><label>Längengrad</label><input type="text" id="weatherLon" value="${w.longitude||'13.41'}"></div>
+            <div class="setting-row"><label>Empfehlungen anzeigen</label><label class="toggle"><input type="checkbox" id="weatherRecommendations" ${w.showRecommendations!==false?'checked':''}><span class="toggle-knob"></span></label></div>`;
 
-    renderQRSettings() {
-        const qr = this.data?.qrCodes || {};
-        const container = document.getElementById('qrSettings');
-        if (!container) return;
+        const qr = d.qrCodes || {};
+        document.getElementById('qrSettings').innerHTML = `
+            <div class="setting-row"><label>QR-Codes aktiv</label><label class="toggle"><input type="checkbox" id="qrEnabled" ${qr.enabled!==false?'checked':''}><span class="toggle-knob"></span></label></div>
+            <div class="form-group" style="margin-top:10px"><label>Basis-URL</label><input type="text" id="qrBaseUrl" value="${qr.baseUrl||''}" placeholder="https://example.com/menu"></div>
+            <div class="setting-row"><label>Auf Produkten</label><label class="toggle"><input type="checkbox" id="qrOnProducts" ${qr.showOnProducts!==false?'checked':''}><span class="toggle-knob"></span></label></div>
+            <div class="setting-row"><label>Im Display</label><label class="toggle"><input type="checkbox" id="qrOnDisplay" ${qr.showOnDisplay!==false?'checked':''}><span class="toggle-knob"></span></label></div>`;
 
-        container.innerHTML = `
-            <div class="setting-row">
-                <label>QR-Codes aktiv</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="qrEnabled" ${qr.enabled !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="form-group">
-                <label>Basis-URL</label>
-                <input type="text" id="qrBaseUrl" value="${qr.baseUrl || ''}" placeholder="https://dein-shop.com">
-            </div>
-            <div class="setting-row">
-                <label>Auf Produkten</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="qrOnProducts" ${qr.showOnProducts !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="setting-row">
-                <label>Auf Display</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="qrOnDisplay" ${qr.showOnDisplay !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        `;
+        const lang = d.languages || { enabled:['de','en'], default:'de' };
+        document.getElementById('languageSettings').innerHTML = `
+            <div class="setting-row"><label>Mehrsprachig aktiv</label><label class="toggle"><input type="checkbox" id="langEnabled" checked><span class="toggle-knob"></span></label></div>
+            <div class="form-group" style="margin-top:10px"><label>Sprachen</label><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                <label class="toggle-chip"><input type="checkbox" class="lang-check" value="de" ${(lang.enabled||[]).includes('de')?'checked':''}><span>🇩🇪 DE</span></label>
+                <label class="toggle-chip"><input type="checkbox" class="lang-check" value="en" ${(lang.enabled||[]).includes('en')?'checked':''}><span>🇬🇧 EN</span></label>
+                <label class="toggle-chip"><input type="checkbox" class="lang-check" value="ar" ${(lang.enabled||[]).includes('ar')?'checked':''}><span>🇸🇦 AR</span></label>
+                <label class="toggle-chip"><input type="checkbox" class="lang-check" value="tr" ${(lang.enabled||[]).includes('tr')?'checked':''}><span>🇹🇷 TR</span></label>
+            </div></div>
+            <div class="form-group"><label>Standard-Sprache</label><select id="defaultLang"><option value="de" ${lang.default==='de'?'selected':''}>Deutsch</option><option value="en" ${lang.default==='en'?'selected':''}>English</option><option value="ar" ${lang.default==='ar'?'selected':''}>العربية</option><option value="tr" ${lang.default==='tr'?'selected':''}>Türkçe</option></select></div>`;
+
+        const anim = d.animations || {};
+        document.getElementById('animationSettings').innerHTML = `
+            <div class="setting-row"><label>Animationen aktiv</label><label class="toggle"><input type="checkbox" id="animEnabled" ${anim.enabled!==false?'checked':''}><span class="toggle-knob"></span></label></div>
+            <div class="form-group" style="margin-top:10px"><label>Seiten-Übergang</label><select id="animTransition"><option value="slide" ${anim.pageTransition==='slide'?'selected':''}>Slide</option><option value="fade" ${anim.pageTransition==='fade'?'selected':''}>Fade</option><option value="zoom" ${anim.pageTransition==='zoom'?'selected':''}>Zoom</option><option value="none" ${anim.pageTransition==='none'?'selected':''}>Kein</option></select></div>
+            <div class="setting-row"><label>Produkt-FadeIn</label><label class="toggle"><input type="checkbox" id="animFadeIn" ${anim.productFadeIn!==false?'checked':''}><span class="toggle-knob"></span></label></div>
+            <div class="setting-row"><label>Angebot-Pulsieren</label><label class="toggle"><input type="checkbox" id="animPulse" ${anim.offerPulse!==false?'checked':''}><span class="toggle-knob"></span></label></div>
+            <div class="form-group"><label>Übergangsdauer (ms)</label><input type="number" id="animDuration" value="${anim.transitionDuration||500}" min="100" max="2000"></div>`;
     }
 
-    // --- 4. LANGUAGE SETTINGS ---
-
-    renderLanguageSettings() {
-        const langs = this.data?.languages || {};
-        const container = document.getElementById('languageSettings');
-        if (!container) return;
-
-        const enabled = langs.enabled || ['de'];
-        const allLangs = [
-            { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-            { code: 'en', name: 'English', flag: '🇬🇧' },
-            { code: 'ar', name: 'العربية', flag: '🇸🇦' }
-        ];
-
-        container.innerHTML = `
-            <div class="setting-row">
-                <label>Sprachauswahl anzeigen</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="langSelector" ${langs.showSelector !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="form-group">
-                <label>Aktive Sprachen</label>
-                <div class="language-checkboxes">
-                    ${allLangs.map(l => `
-                        <label class="checkbox-label">
-                            <input type="checkbox" class="lang-check" value="${l.code}" ${enabled.includes(l.code) ? 'checked' : ''}>
-                            <span>${l.flag} ${l.name}</span>
-                        </label>
-                    `).join('')}
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Standardsprache</label>
-                <select id="defaultLang">
-                    ${allLangs.filter(l => enabled.includes(l.code)).map(l => `
-                        <option value="${l.code}" ${langs.default === l.code ? 'selected' : ''}>${l.flag} ${l.name}</option>
-                    `).join('')}
-                </select>
-            </div>
-        `;
-    }
-
-    // --- 5. ANIMATION SETTINGS ---
-
-    renderAnimationSettings() {
-        const anims = this.data?.animations || {};
-        const container = document.getElementById('animationSettings');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="setting-row">
-                <label>Animationen aktiv</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="animEnabled" ${anims.enabled !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="form-group">
-                <label>Seitenübergang</label>
-                <select id="animTransition">
-                    <option value="slide" ${anims.pageTransition === 'slide' ? 'selected' : ''}>Slide</option>
-                    <option value="fade" ${anims.pageTransition === 'fade' ? 'selected' : ''}>Fade</option>
-                    <option value="scale" ${anims.pageTransition === 'scale' ? 'selected' : ''}>Scale</option>
-                    <option value="none" ${anims.pageTransition === 'none' ? 'selected' : ''}>Keine</option>
-                </select>
-            </div>
-            <div class="setting-row">
-                <label>Produkte Fade-In</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="animFadeIn" ${anims.productFadeIn !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="setting-row">
-                <label>Angebote Pulse</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="animPulse" ${anims.offerPulse !== false ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="form-group">
-                <label>Übergangsdauer (ms)</label>
-                <input type="number" id="animDuration" value="${anims.transitionDuration || 500}" min="100" max="2000" step="100">
-            </div>
-        `;
-    }
     async testWeather() {
         const lat = document.getElementById('weatherLat')?.value || '52.52';
         const lon = document.getElementById('weatherLon')?.value || '13.41';
@@ -2119,66 +1331,40 @@ class MenuboardAdmin {
         if (result) result.textContent = '⏳ Lädt Wetterdaten...';
         try {
             const res = await fetch(`/weather?lat=${lat}&lon=${lon}`);
-            if (!res.ok) throw new Error('Wetter-API nicht erreichbar');
             const w = await res.json();
+            if (!res.ok) throw new Error(w.error || 'Fehler');
             if (result) result.textContent = `${w.icon} ${w.temperature}°C | 💨 ${w.windspeed} km/h${w.recommendation ? ' | ' + w.recommendation : ''}`;
         } catch (e) {
-            if (result) result.textContent = '❌ Fehler: ' + e.message;
+            if (result) result.textContent = '❌ ' + e.message;
         }
     }
 
     async saveFeatures() {
-        // Weather
-        const weather = {
-            enabled: document.getElementById('weatherEnabled')?.checked !== false,
-            latitude: document.getElementById('weatherLat')?.value || '52.52',
-            longitude: document.getElementById('weatherLon')?.value || '13.41',
-            showOnDisplay: true,
-            showRecommendations: document.getElementById('weatherRecommendations')?.checked !== false,
-            updateInterval: 300000
-        };
-
-        // QR
-        const qrCodes = {
-            enabled: document.getElementById('qrEnabled')?.checked !== false,
-            baseUrl: document.getElementById('qrBaseUrl')?.value || '',
-            showOnProducts: document.getElementById('qrOnProducts')?.checked !== false,
-            showOnDisplay: document.getElementById('qrOnDisplay')?.checked !== false
-        };
-
-        // Languages
+        if (!this.data) return;
+        this.data.weather = { enabled: document.getElementById('weatherEnabled')?.checked !== false, latitude: document.getElementById('weatherLat')?.value || '52.52', longitude: document.getElementById('weatherLon')?.value || '13.41', showOnDisplay: true, showRecommendations: document.getElementById('weatherRecommendations')?.checked !== false, updateInterval: 300000 };
+        this.data.qrCodes = { enabled: document.getElementById('qrEnabled')?.checked !== false, baseUrl: document.getElementById('qrBaseUrl')?.value || '', showOnProducts: document.getElementById('qrOnProducts')?.checked !== false, showOnDisplay: document.getElementById('qrOnDisplay')?.checked !== false };
         const langChecks = document.querySelectorAll('.lang-check:checked');
-        const languages = {
-            enabled: Array.from(langChecks).map(cb => cb.value),
-            default: document.getElementById('defaultLang')?.value || 'de',
-            showSelector: document.getElementById('langSelector')?.checked !== false
-        };
-
-        // Animations
-        const animations = {
-            enabled: document.getElementById('animEnabled')?.checked !== false,
-            pageTransition: document.getElementById('animTransition')?.value || 'slide',
-            productFadeIn: document.getElementById('animFadeIn')?.checked !== false,
-            offerPulse: document.getElementById('animPulse')?.checked !== false,
-            transitionDuration: parseInt(document.getElementById('animDuration')?.value || '500')
-        };
-
-        this.data.weather = weather;
-        this.data.qrCodes = qrCodes;
-        this.data.languages = languages;
-        this.data.animations = animations;
-
+        this.data.languages = { enabled: Array.from(langChecks).map(cb => cb.value), default: document.getElementById('defaultLang')?.value || 'de', showSelector: true };
+        this.data.animations = { enabled: document.getElementById('animEnabled')?.checked !== false, pageTransition: document.getElementById('animTransition')?.value || 'slide', productFadeIn: document.getElementById('animFadeIn')?.checked !== false, offerPulse: document.getElementById('animPulse')?.checked !== false, transitionDuration: parseInt(document.getElementById('animDuration')?.value || '500') };
         await this.saveData();
         this.showToast('Features gespeichert!', 'success');
     }
 
-    formatBytes(bytes) {
-        if (bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    // ═══ MODALS ═══
+    closeAllModals() {
+        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    }
+
+    // ═══ TOAST ═══
+    showToast(msg, type = 'info') {
+        const icons = { success:'fa-circle-check', error:'fa-circle-xmark', info:'fa-circle-info' };
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `<i class="fas ${icons[type]||'fa-circle-info'} toast-icon ${type}"></i><span>${msg}</span>`;
+        document.getElementById('toastContainer').appendChild(toast);
+        setTimeout(() => { toast.classList.add('toast-fade'); setTimeout(() => toast.remove(), 300); }, 3000);
     }
 }
 
 const admin = new MenuboardAdmin();
+window.admin = admin;

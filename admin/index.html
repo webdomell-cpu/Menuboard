@@ -1,1014 +1,767 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digital Menuboard Admin v7.50</title>
-    <link rel="stylesheet" href="admin.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Menuboard v8.0 — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="admin.css">
 </head>
 <body>
-    <div class="mobile-overlay" id="mobileOverlay"></div>
+<div class="app-shell">
 
-    <div class="app-container">
-        <!-- SIDEBAR -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-brand">
-                    <div class="brand-icon"><i class="fas fa-tv"></i></div>
-                    <div class="brand-text">
-                        <h1>Menuboard</h1>
-                        <span>Admin v7.50</span>
-                    </div>
-                </div>
-                <button class="sidebar-close" id="sidebarClose"><i class="fas fa-times"></i></button>
-            </div>
-
-            <nav class="sidebar-nav">
-                <a href="#" class="nav-item active" data-tab="dashboard">
-                    <i class="fas fa-chart-pie"></i> Dashboard
-                </a>
-                <a href="#" class="nav-item" data-tab="products">
-                    <i class="fas fa-utensils"></i> Produkte
-                    <span class="nav-badge" id="product-count">0</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="zones">
-                    <i class="fas fa-th-large"></i> Zonen
-                    <span class="nav-badge" id="zone-count">0</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="designer">
-                    <i class="fas fa-paint-brush"></i> Designer
-                </a>
-                <a href="#" class="nav-item" data-tab="templates">
-                    <i class="fas fa-layer-group"></i> Templates
-                    <span class="nav-badge" id="template-count">0</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="displays">
-                    <i class="fas fa-tv"></i> Displays
-                    <span class="nav-badge" id="display-count">0</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="media">
-                    <i class="fas fa-images"></i> Mediathek
-                    <span class="nav-badge" id="media-count">0</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="schedules">
-                    <i class="fas fa-clock"></i>
-                    <span>Zeitpläne</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="features">
-                    <i class="fas fa-star"></i>
-                    <span>Features</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="settings">
-                    <i class="fas fa-cog"></i> Einstellungen
-                </a>
-            </nav>
-
-            <div class="sidebar-footer">
-                <a href="/" target="_blank" class="preview-link">
-                    <i class="fas fa-external-link-alt"></i> Display öffnen
-                </a>
-                <div class="server-status">
-                    <span class="status-dot online" id="serverStatus"></span>
-                    <span>Server online</span>
-                </div>
-            </div>
-        </aside>
-
-        <!-- MAIN CONTENT -->
-        <main class="main-content">
-            <!-- TOP BAR -->
-            <header class="top-bar">
-                <div class="top-bar-left">
-                    <button class="btn-icon" id="sidebarToggle"><i class="fas fa-bars"></i></button>
-                    <h1 class="page-title" id="pageTitle">Dashboard</h1>
-                </div>
-                <div class="top-bar-right">
-                    <button class="btn btn-outline btn-sm" id="saveAllBtn">
-                        <i class="fas fa-save"></i> <span class="btn-text">Speichern</span>
-                    </button>
-                </div>
-            </header>
-
-            <!-- CONTENT AREA -->
-            <div class="content-area">
-
-                <!-- DASHBOARD -->
-                <div class="tab-content active" id="tab-dashboard">
-                    <div class="dashboard-grid">
-                        <div class="dashboard-card stats-card">
-                            <div class="stats-icon products"><i class="fas fa-utensils"></i></div>
-                            <div class="stats-info">
-                                <h3 id="dash-product-count">0</h3>
-                                <p>Produkte</p>
-                            </div>
-                        </div>
-                        <div class="dashboard-card stats-card">
-                            <div class="stats-icon zones"><i class="fas fa-th-large"></i></div>
-                            <div class="stats-info">
-                                <h3 id="dash-zone-count">0</h3>
-                                <p>Zonen</p>
-                            </div>
-                        </div>
-                        <div class="dashboard-card stats-card">
-                            <div class="stats-icon media"><i class="fas fa-images"></i></div>
-                            <div class="stats-info">
-                                <h3 id="dash-media-count">0</h3>
-                                <p>Medien</p>
-                            </div>
-                        </div>
-                        <div class="dashboard-card stats-card">
-                            <div class="stats-icon templates"><i class="fas fa-layer-group"></i></div>
-                            <div class="stats-info">
-                                <h3 id="dash-template-count">0</h3>
-                                <p>Templates</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="dashboard-row">
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-bolt"></i> Schnellaktionen</h3>
-                            </div>
-                            <div class="quick-actions">
-                                <a href="#" class="quick-action" data-tab="products">
-                                    <i class="fas fa-plus"></i> Produkt hinzufügen
-                                </a>
-                                <a href="#" class="quick-action" data-tab="zones">
-                                    <i class="fas fa-plus"></i> Zone hinzufügen
-                                </a>
-                                <a href="#" class="quick-action" data-tab="templates">
-                                    <i class="fas fa-plus"></i> Template erstellen
-                                </a>
-                                <a href="#" class="quick-action" data-tab="displays">
-                                    <i class="fas fa-plus"></i> Display hinzufügen
-                                </a>
-                            </div>
-                        </div>
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-info-circle"></i> System-Info</h3>
-                            </div>
-                            <div class="system-info">
-                                <div class="info-row">
-                                    <span>Version</span>
-                                    <span class="version-badge" id="dash-version">7.50</span>
-                                </div>
-                                <div class="info-row">
-                                    <span>Letzte Änderung</span>
-                                    <span id="last-modified">-</span>
-                                </div>
-                                <div class="info-row">
-                                    <span>Aktuelles Theme</span>
-                                    <span id="current-theme">Dark Mode</span>
-                                </div>
-                                <div class="info-row">
-                                    <span>Displays</span>
-                                    <span id="dash-display-count">0</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="dashboard-card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-eye"></i> Live-Vorschau</h3>
-                        </div>
-                        <div class="preview-container">
-                            <iframe src="/" id="livePreview"></iframe>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PRODUCTS -->
-                <div class="tab-content" id="tab-products">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Produkte</h2>
-                            <p>Verwalte deine Menüpunkte</p>
-                        </div>
-                        <div class="section-actions">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="productSearch" placeholder="Suchen...">
-                            </div>
-                            <select class="filter-select" id="categoryFilter">
-                                <option value="">Alle Kategorien</option>
-                                <option value="burger">Burger</option>
-                                <option value="sides">Beilagen</option>
-                                <option value="drinks">Getränke</option>
-                                <option value="dessert">Desserts</option>
-                            </select>
-                            <button class="btn btn-primary" id="addProductBtn">
-                                <i class="fas fa-plus"></i> <span class="btn-text">Neues Produkt</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="products-grid" id="productsGrid"></div>
-                </div>
-
-                <!-- ZONES -->
-                <div class="tab-content" id="tab-zones">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Zonen</h2>
-                            <p>Verwalte deine Display-Zonen</p>
-                        </div>
-                        <div class="section-actions">
-                            <button class="btn btn-primary" id="addZoneBtn">
-                                <i class="fas fa-plus"></i> <span class="btn-text">Neue Zone</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="zones-list" id="zonesList"></div>
-                </div>
-
-                <!-- DESIGNER -->
-                <div class="tab-content" id="tab-designer">
-                    <div class="designer-container">
-                        <div class="designer-sidebar">
-                            <div class="designer-panel">
-                                <h3><i class="fas fa-tools"></i> Werkzeuge</h3>
-                                <div class="tool-group">
-                                    <button class="tool-btn active" id="toolSelect"><i class="fas fa-mouse-pointer"></i> Auswählen</button>
-                                    <button class="tool-btn" id="toolAddMenu"><i class="fas fa-utensils"></i> Menü Zone</button>
-                                    <button class="tool-btn" id="toolAddMedia"><i class="fas fa-image"></i> Media Zone</button>
-                                    <button class="tool-btn" id="toolAddTicker"><i class="fas fa-scroll"></i> Ticker Zone</button>
-                                    <button class="tool-btn" id="toolAddText"><i class="fas fa-font"></i> Text Zone</button>
-                                    <button class="tool-btn" id="toolAddClock"><i class="fas fa-clock"></i> Uhr Zone</button>
-                                </div>
-                            </div>
-
-                            <div class="designer-panel">
-                                <h3><i class="fas fa-th"></i> Raster</h3>
-                                <div class="grid-controls">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="showGrid" checked>
-                                        <span class="toggle-slider"></span>
-                                        <span class="toggle-label">Raster anzeigen</span>
-                                    </label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="snapGrid" checked>
-                                        <span class="toggle-slider"></span>
-                                        <span class="toggle-label">Am Raster einrasten</span>
-                                    </label>
-                                    <div class="input-group">
-                                        <label>Rastergröße</label>
-                                        <input type="number" id="gridSize" value="10" min="1" max="50">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="designer-panel">
-                                <h3><i class="fas fa-magic"></i> Templates</h3>
-                                <div class="template-buttons" id="templateButtons"></div>
-                            </div>
-
-                            <div class="designer-panel">
-                                <h3><i class="fas fa-info-circle"></i> Eigenschaften</h3>
-                                <div class="properties-panel" id="propertiesPanel">
-                                    <p class="properties-empty">Wähle eine Zone aus</p>
-                                </div>
-                            </div>
-
-                            <div class="designer-actions">
-                                <button class="btn btn-primary btn-block" id="saveLayoutBtn">
-                                    <i class="fas fa-save"></i> Layout speichern
-                                </button>
-                                <div style="display:flex;gap:6px;">
-                                    <button class="btn btn-outline btn-sm" id="undoBtn"><i class="fas fa-undo"></i></button>
-                                    <button class="btn btn-outline btn-sm" id="redoBtn"><i class="fas fa-redo"></i></button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="designer-canvas-wrapper">
-                            <div class="canvas-toolbar">
-                                <div class="canvas-info">
-                                    <span id="selectedZone">Keine Zone ausgewählt</span>
-                                    <span id="canvasSize">1920 x 1080</span>
-                                </div>
-                                <div class="canvas-zoom">
-                                    <button class="btn-icon" id="zoomOut"><i class="fas fa-minus"></i></button>
-                                    <span id="zoomLevel">100%</span>
-                                    <button class="btn-icon" id="zoomIn"><i class="fas fa-plus"></i></button>
-                                    <button class="btn-icon" id="zoomFit"><i class="fas fa-compress"></i></button>
-                                </div>
-                            </div>
-                            <div class="designer-canvas-outer">
-                                <div class="designer-canvas show-grid" id="designerCanvas"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TEMPLATES -->
-                <div class="tab-content" id="tab-templates">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Templates</h2>
-                            <p>Verwalte Layout-Vorlagen</p>
-                        </div>
-                        <div class="section-actions">
-                            <button class="btn btn-primary" id="addTemplateBtn">
-                                <i class="fas fa-plus"></i> <span class="btn-text">Neues Template</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="templates-grid" id="templatesGrid"></div>
-                </div>
-
-                <!-- DISPLAYS -->
-                <div class="tab-content" id="tab-displays">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Displays</h2>
-                            <p>Verwalte deine Bildschirme</p>
-                        </div>
-                        <div class="section-actions">
-                            <button class="btn btn-primary" id="addDisplayBtn">
-                                <i class="fas fa-plus"></i> <span class="btn-text">Neues Display</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="display-stats">
-                        <div class="display-stat">
-                            <h4 id="dash-display-count">0</h4>
-                            <p>Gesamt</p>
-                        </div>
-                        <div class="display-stat">
-                            <h4 id="dash-display-online">0</h4>
-                            <p>Online</p>
-                        </div>
-                        <div class="display-stat">
-                            <h4 id="dash-display-active">0</h4>
-                            <p>Aktiv</p>
-                        </div>
-                    </div>
-                    <div class="displays-grid" id="displaysList"></div>
-                </div>
-
-                <!-- MEDIA -->
-                <div class="tab-content" id="tab-media">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Mediathek</h2>
-                            <p>Bilder und Videos verwalten</p>
-                        </div>
-                        <div class="section-actions">
-                            <div class="upload-area">
-                                <input type="file" id="mediaUpload" multiple accept="image/*,video/*">
-                                <div class="upload-placeholder">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                    <p>Dateien hochladen</p>
-                                    <span>JPG, PNG, GIF, MP4, WEBM</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="media-grid" id="mediaGrid"></div>
-                </div>
-
-                <!-- SETTINGS -->
-                <!-- ═══ SCHEDULES TAB ═══ -->
-                <div class="tab-content" id="tab-schedules">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Zeitpläne</h2>
-                            <p>Zeitgesteuerte Inhalte & Tagesmenüs</p>
-                        </div>
-                        <div class="section-actions">
-                            <button class="btn btn-primary" id="addScheduleBtn">
-                                <i class="fas fa-plus"></i> Zeitplan hinzufügen
-                            </button>
-                        </div>
-                    </div>
-                    <div class="schedules-list" id="schedulesList">
-                        <div style="text-align:center;padding:40px;color:var(--text-muted);">
-                            <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
-                            <p>Zeitpläne werden geladen...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ═══ FEATURES TAB ═══ -->
-                <div class="tab-content" id="tab-features">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Features</h2>
-                            <p>Wetter, QR-Codes, Sprachen & Animationen</p>
-                        </div>
-                        <div class="section-actions">
-                            <button class="btn btn-primary" id="saveFeaturesBtn">
-                                <i class="fas fa-save"></i> Speichern
-                            </button>
-                        </div>
-                    </div>
-                    <div class="settings-grid">
-                        <!-- Wetter -->
-                        <div class="settings-card">
-                            <h3><i class="fas fa-cloud-sun"></i> Wetter-Integration</h3>
-                            <div id="weatherSettings">Lädt...</div>
-                            <button class="btn btn-outline btn-sm" style="margin-top:12px;" onclick="admin.testWeather()">
-                                <i class="fas fa-vial"></i> Wetter testen
-                            </button>
-                            <div id="weatherTestResult" style="margin-top:8px;font-size:13px;color:var(--text-muted);"></div>
-                        </div>
-                        <!-- QR Codes -->
-                        <div class="settings-card">
-                            <h3><i class="fas fa-qrcode"></i> QR-Codes</h3>
-                            <div id="qrSettings">Lädt...</div>
-                        </div>
-                        <!-- Sprachen -->
-                        <div class="settings-card">
-                            <h3><i class="fas fa-language"></i> Mehrsprachigkeit</h3>
-                            <div id="languageSettings">Lädt...</div>
-                        </div>
-                        <!-- Animationen -->
-                        <div class="settings-card">
-                            <h3><i class="fas fa-magic"></i> Animationen</h3>
-                            <div id="animationSettings">Lädt...</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="tab-content" id="tab-settings">
-                    <div class="section-header">
-                        <div class="section-title">
-                            <h2>Einstellungen</h2>
-                            <p>System konfigurieren</p>
-                        </div>
-                        <div class="section-actions">
-                            <button class="btn btn-primary" id="saveSettingsBtn">
-                                <i class="fas fa-save"></i> Speichern
-                            </button>
-                            <button class="btn btn-outline" id="resetSettingsBtn">
-                                <i class="fas fa-undo"></i> Zurücksetzen
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="settings-grid">
-                        <div class="settings-card">
-                            <h3><i class="fas fa-palette"></i> Erscheinungsbild</h3>
-                            <div class="setting-row">
-                                <label>Theme</label>
-                                <select id="settingTheme">
-                                    <option value="dark">Dark Mode</option>
-                                    <option value="light">Light Mode</option>
-                                    <option value="burger">Burger Theme</option>
-                                    <option value="coffee">Coffee Theme</option>
-                                </select>
-                                <span id="themePreviewBadge" class="theme-preview-badge"></span>
-                            </div>
-                            <div class="setting-row">
-                                <label>Schriftart</label>
-                                <select id="settingFont"></select>
-                            </div>
-                            <div class="font-preview" id="fontPreview">AaBbCc 123</div>
-                        </div>
-
-                        <div class="settings-card">
-                            <h3><i class="fas fa-globe"></i> Allgemein</h3>
-                            <div class="setting-row">
-                                <label>Währung</label>
-                                <select id="settingCurrency"></select>
-                            </div>
-                            <div class="setting-row">
-                                <label>Sprache</label>
-                                <select id="settingLanguage">
-                                    <option value="de">Deutsch</option>
-                                    <option value="en">English</option>
-                                    <option value="ar">العربية</option>
-                                </select>
-                            </div>
-                            <div class="setting-row">
-                                <label>Aktualisierungsrate (Sek.)</label>
-                                <input type="number" id="settingRefresh" value="30" min="5" max="300">
-                            </div>
-                        </div>
-
-                        <div class="settings-card">
-                            <h3><i class="fas fa-toggle-on"></i> Funktionen</h3>
-                            <div class="setting-row">
-                                <label>Auto-Rotation</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="settingAutoRotate">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="setting-row">
-                                <label>Badges anzeigen</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="settingShowBadges" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="settings-card">
-                            <h3><i class="fas fa-scroll"></i> Ticker</h3>
-                            <div class="setting-row">
-                                <label>Ticker aktiv</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="settingTickerEnabled" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="setting-row">
-                                <label>Geschwindigkeit</label>
-                                <input type="range" id="settingTickerSpeed" value="50" min="10" max="100">
-                                <span class="range-value">50</span>
-                            </div>
-                            <div class="setting-row">
-                                <label>Textfarbe</label>
-                                <input type="color" id="settingTickerColor" value="#FFD700">
-                            </div>
-                            <div class="setting-row">
-                                <label>Hintergrund</label>
-                                <input type="color" id="settingTickerBg" value="#1a1a2e">
-                            </div>
-                        </div>
-
-                        <div class="settings-card">
-                            <h3><i class="fas fa-desktop"></i> Auflösung</h3>
-                            <div class="setting-row">
-                                <label>Bildschirmauflösung</label>
-                                <select id="settingResolution">
-                                    <option value="1920x1080">1920 x 1080 (Full HD)</option>
-                                    <option value="3840x2160">3840 x 2160 (4K)</option>
-                                    <option value="1280x720">1280 x 720 (HD)</option>
-                                    <option value="1080x1920">1080 x 1920 (Portrait)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="settings-card">
-                            <h3><i class="fas fa-code-branch"></i> Version & Info</h3>
-                            <div id="versionInfo"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon"><i class="fas fa-tv"></i></div>
+      <div class="brand-text">
+        <span class="brand-name">MenuBoard</span>
+        <span class="brand-version">v8.0</span>
+      </div>
     </div>
 
-    <!-- PRODUCT MODAL -->
-    <div class="modal" id="productModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="productModalTitle">Neues Produkt</h3>
-                <button class="modal-close"><i class="fas fa-times"></i></button>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Übersicht</div>
+      <a class="nav-item active" data-tab="dashboard"><i class="fas fa-chart-pie"></i><span>Dashboard</span></a>
+
+      <div class="nav-section-label">Inhalte</div>
+      <a class="nav-item" data-tab="products"><i class="fas fa-burger"></i><span>Produkte</span><span class="nav-badge" id="nb-products">0</span></a>
+      <a class="nav-item" data-tab="media"><i class="fas fa-photo-film"></i><span>Mediathek</span><span class="nav-badge" id="nb-media">0</span></a>
+
+      <div class="nav-section-label">Displays</div>
+      <a class="nav-item" data-tab="displays"><i class="fas fa-desktop"></i><span>Displays</span><span class="nav-badge" id="nb-displays">0</span></a>
+      <a class="nav-item" data-tab="templates"><i class="fas fa-table-cells-large"></i><span>Templates</span><span class="nav-badge" id="nb-templates">0</span></a>
+      <a class="nav-item" data-tab="designer"><i class="fas fa-pen-ruler"></i><span>Designer</span></a>
+      <a class="nav-item" data-tab="playlists"><i class="fas fa-list-ol"></i><span>Playlisten</span><span class="nav-badge" id="nb-playlists">0</span></a>
+      <a class="nav-item" data-tab="remote"><i class="fas fa-satellite-dish"></i><span>Fernsteuerung</span></a>
+
+      <div class="nav-section-label">Automatisierung</div>
+      <a class="nav-item" data-tab="schedules"><i class="fas fa-clock"></i><span>Zeitpläne</span></a>
+      <a class="nav-item" data-tab="analytics"><i class="fas fa-chart-bar"></i><span>Analytics</span></a>
+
+      <div class="nav-section-label">System</div>
+      <a class="nav-item" data-tab="features"><i class="fas fa-sliders"></i><span>Features</span></a>
+      <a class="nav-item" data-tab="settings"><i class="fas fa-gear"></i><span>Einstellungen</span></a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="server-status">
+        <span class="status-dot" id="serverDot"></span>
+        <span id="serverStatusTxt">Verbunden</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-wrap">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button class="topbar-menu-btn" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+      <h1 class="topbar-title" id="pageTitle">Dashboard</h1>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" id="saveAllBtn"><i class="fas fa-floppy-disk"></i> Speichern</button>
+        <div class="topbar-divider"></div>
+        <span class="topbar-time" id="topbarTime"></span>
+      </div>
+    </header>
+
+    <!-- TAB CONTENTS -->
+    <main class="main-content">
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <div class="tab-pane active" id="tab-dashboard">
+        <div class="dashboard-grid">
+          <!-- Stat Cards Row -->
+          <div class="stat-row">
+            <div class="stat-card">
+              <div class="stat-icon" style="--c:#6c63ff"><i class="fas fa-burger"></i></div>
+              <div class="stat-body"><div class="stat-value" id="ds-products">0</div><div class="stat-label">Produkte</div></div>
             </div>
-            <div class="modal-body">
-                <form id="productForm">
-                    <input type="hidden" id="productId">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Name</label>
-                            <input type="text" id="productTitle" placeholder="Produktname" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Preis</label>
-                            <div class="input-prefix">
-                                <span class="prefix">€</span>
-                                <input type="text" id="productPrice" placeholder="0.00" required>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Kategorie</label>
-                            <select id="productCategory">
-                                <option value="burger">Burger</option>
-                                <option value="sides">Beilagen</option>
-                                <option value="drinks">Getränke</option>
-                                <option value="dessert">Desserts</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Badge</label>
-                            <select id="productBadge">
-                                <option value="">Kein Badge</option>
-                                <option value="Bestseller">Bestseller</option>
-                                <option value="Neu">Neu</option>
-                                <option value="Angebot">Angebot</option>
-                                <option value="Limitiert">Limitiert</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Bestand</label>
-                            <select id="productStock">
-                                <option value="available">Verfügbar</option>
-                                <option value="low">Wenig</option>
-                                <option value="soldout">Ausverkauft</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Beschreibung</label>
-                        <textarea id="productDescription" rows="2" placeholder="Optionale Beschreibung..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Bild</label>
-                        <div class="image-upload" id="productImageUpload">
-                            <input type="file" id="productImageFile" accept="image/*" style="display:none;">
-                            <div class="image-preview" id="productImagePreview">
-                                <i class="fas fa-image"></i>
-                                <p>Bild hochladen oder URL eingeben</p>
-                            </div>
-                            <div class="url-input-wrapper">
-                                <input type="text" id="productImageUrl" placeholder="Bild-URL oder hochladen...">
-                            </div>
-                        </div>
-                    </div>
-                </form>
+            <div class="stat-card">
+              <div class="stat-icon" style="--c:#22d3a4"><i class="fas fa-desktop"></i></div>
+              <div class="stat-body"><div class="stat-value" id="ds-displays">0</div><div class="stat-label">Displays</div></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline modal-cancel">Abbrechen</button>
-                <button class="btn btn-primary" id="saveProductBtn">Speichern</button>
+            <div class="stat-card">
+              <div class="stat-icon" style="--c:#f59e0b"><i class="fas fa-eye"></i></div>
+              <div class="stat-body"><div class="stat-value" id="ds-views">0</div><div class="stat-label">Aufrufe heute</div></div>
             </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="--c:#ef4444"><i class="fas fa-circle-check"></i></div>
+              <div class="stat-body"><div class="stat-value" id="ds-online">0</div><div class="stat-label">Online Displays</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="--c:#a78bfa"><i class="fas fa-list-ol"></i></div>
+              <div class="stat-body"><div class="stat-value" id="ds-playlists">0</div><div class="stat-label">Playlisten</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="--c:#38bdf8"><i class="fas fa-table-cells-large"></i></div>
+              <div class="stat-body"><div class="stat-value" id="ds-templates">0</div><div class="stat-label">Templates</div></div>
+            </div>
+          </div>
+
+          <!-- Displays Status Panel -->
+          <div class="dash-panel">
+            <div class="panel-header">
+              <h3><i class="fas fa-desktop"></i> Display-Status</h3>
+              <button class="btn btn-ghost btn-xs" onclick="admin.switchTab('displays')">Alle anzeigen →</button>
+            </div>
+            <div id="ds-display-list" class="display-status-list"></div>
+          </div>
+
+          <!-- Top Products Panel -->
+          <div class="dash-panel">
+            <div class="panel-header">
+              <h3><i class="fas fa-trophy"></i> Top Produkte</h3>
+              <button class="btn btn-ghost btn-xs" onclick="admin.switchTab('analytics')">Analytics →</button>
+            </div>
+            <div id="ds-top-products" class="top-products-list"></div>
+          </div>
+
+          <!-- Live Preview -->
+          <div class="dash-panel dash-panel--wide">
+            <div class="panel-header">
+              <h3><i class="fas fa-eye"></i> Live-Vorschau</h3>
+              <div class="preview-controls">
+                <select id="previewDisplaySelect" class="select-sm" onchange="admin.updatePreview()"></select>
+                <button class="btn btn-ghost btn-xs" onclick="admin.refreshPreview()"><i class="fas fa-rotate"></i></button>
+              </div>
+            </div>
+            <div class="preview-frame-wrap">
+              <iframe src="/display/main" id="livePreview" class="preview-frame"></iframe>
+            </div>
+          </div>
+
+          <!-- System Info Panel -->
+          <div class="dash-panel">
+            <div class="panel-header"><h3><i class="fas fa-info-circle"></i> System</h3></div>
+            <div class="info-grid">
+              <div class="info-row"><span class="info-label">Version</span><span class="info-val badge-version">v8.0</span></div>
+              <div class="info-row"><span class="info-label">Zuletzt gespeichert</span><span class="info-val" id="ds-saved">—</span></div>
+              <div class="info-row"><span class="info-label">Theme</span><span class="info-val" id="ds-theme">—</span></div>
+              <div class="info-row"><span class="info-label">Währung</span><span class="info-val" id="ds-currency">—</span></div>
+              <div class="info-row"><span class="info-label">Sprache</span><span class="info-val" id="ds-lang">—</span></div>
+            </div>
+          </div>
         </div>
-    </div>
+      </div>
 
-    <!-- ZONE MODAL -->
-    <div class="modal" id="zoneModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3 id="zoneModalTitle">Neue Zone</h3>
-                <button class="modal-close"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <form id="zoneForm">
-                    <input type="hidden" id="zoneId">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Name</label>
-                            <input type="text" id="zoneName" placeholder="Zonen-Name" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Typ</label>
-                            <select id="zoneType">
-                                <option value="menu">Menü</option>
-                                <option value="media">Media</option>
-                                <option value="ticker">Ticker</option>
-                                <option value="text">Text</option>
-                                <option value="clock">Uhr</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Position X (%)</label>
-                            <input type="number" id="zoneX" value="10" step="0.1">
-                        </div>
-                        <div class="form-group">
-                            <label>Position Y (%)</label>
-                            <input type="number" id="zoneY" value="10" step="0.1">
-                        </div>
-                        <div class="form-group">
-                            <label>Breite (%)</label>
-                            <input type="number" id="zoneW" value="20" step="0.1">
-                        </div>
-                        <div class="form-group">
-                            <label>Höhe (%)</label>
-                            <input type="number" id="zoneH" value="20" step="0.1">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="zoneVisible" checked>
-                                <span class="toggle-slider"></span>
-                                <span class="toggle-label">Sichtbar</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div id="zoneArticlesGroup">
-                        <h4 style="margin:16px 0 8px;font-size:14px;"><i class="fas fa-utensils" style="color:var(--accent-primary);"></i> Produkte</h4>
-                        <div class="zone-product-selector" id="zoneProductSelector"></div>
-
-                        <div class="article-builder">
-                            <div class="article-toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="showImage" checked>
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label"><i class="fas fa-image"></i> Bild</span>
-                                </label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="showTitle" checked>
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label"><i class="fas fa-heading"></i> Titel</span>
-                                </label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="showPrice" checked>
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label"><i class="fas fa-tag"></i> Preis</span>
-                                </label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="showDescription">
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label"><i class="fas fa-align-left"></i> Beschreibung</span>
-                                </label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="showBadge" checked>
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label"><i class="fas fa-certificate"></i> Badge</span>
-                                </label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="showStock" checked>
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label"><i class="fas fa-box"></i> Bestand</span>
-                                </label>
-                            </div>
-
-                            <div class="article-style-section">
-                                <h4><i class="fas fa-paint-brush"></i> Stil</h4>
-                                <div class="style-grid">
-                                    <div class="style-group">
-                                        <label>Preis-Position</label>
-                                        <select id="pricePosition">
-                                            <option value="bottom-right">Unten rechts</option>
-                                            <option value="top-right">Oben rechts</option>
-                                            <option value="inline">Inline</option>
-                                            <option value="overlay">Overlay</option>
-                                        </select>
-                                    </div>
-                                    <div class="style-group">
-                                        <label>Preis-Stil</label>
-                                        <select id="priceStyle">
-                                            <option value="badge-gold">Gold Badge</option>
-                                            <option value="badge-dark">Dark Badge</option>
-                                            <option value="text-plain">Einfacher Text</option>
-                                            <option value="text-bold">Fetter Text</option>
-                                        </select>
-                                    </div>
-                                    <div class="style-group">
-                                        <label>Bild-Größe</label>
-                                        <select id="imageSize">
-                                            <option value="large">Groß</option>
-                                            <option value="medium">Mittel</option>
-                                            <option value="small">Klein</option>
-                                        </select>
-                                    </div>
-                                    <div class="style-group">
-                                        <label>Karten-Layout</label>
-                                        <select id="cardLayout">
-                                            <option value="vertical">Vertikal</option>
-                                            <option value="horizontal">Horizontal</option>
-                                            <option value="compact">Kompakt</option>
-                                        </select>
-                                    </div>
-                                    <div class="style-group">
-                                        <label>Text-Ausrichtung</label>
-                                        <select id="textAlign">
-                                            <option value="left">Links</option>
-                                            <option value="center">Zentriert</option>
-                                            <option value="right">Rechts</option>
-                                        </select>
-                                    </div>
-                                    <div class="style-group">
-                                        <label>Spalten</label>
-                                        <select id="columnsCount">
-                                            <option value="auto">Auto</option>
-                                            <option value="1">1</option>
-                                            <option value="2">2</option>
-                                            <option value="3">3</option>
-                                            <option value="4">4</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="zoneMediaGroup" style="display:none;">
-                        <div class="form-group">
-                            <label>Media URL</label>
-                            <input type="text" id="zoneMediaSrc" placeholder="/uploads/bild.jpg">
-                        </div>
-                        <div class="form-group">
-                            <label>Media Typ</label>
-                            <select id="zoneMediaType">
-                                <option value="image">Bild</option>
-                                <option value="video">Video</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="zoneTickerGroup" style="display:none;">
-                        <div class="form-group">
-                            <label>Ticker Text</label>
-                            <textarea id="zoneTickerText" rows="2" placeholder="🍔 Willkommen!"></textarea>
-                        </div>
-                    </div>
-
-                    <div id="zoneTextGroup" style="display:none;">
-                        <div class="form-group">
-                            <label>Text</label>
-                            <textarea id="zoneTextContent" rows="2"></textarea>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Schriftgröße</label>
-                                <input type="number" id="zoneTextSize" value="24">
-                            </div>
-                            <div class="form-group">
-                                <label>Farbe</label>
-                                <input type="color" id="zoneTextColor" value="#ffffff">
-                            </div>
-                            <div class="form-group">
-                                <label>Ausrichtung</label>
-                                <select id="zoneTextAlign">
-                                    <option value="left">Links</option>
-                                    <option value="center">Zentriert</option>
-                                    <option value="right">Rechts</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-danger" id="deleteZoneBtn" style="margin-right:auto;">
-                    <i class="fas fa-trash"></i> Löschen
-                </button>
-                <button class="btn btn-outline modal-cancel">Abbrechen</button>
-                <button class="btn btn-primary" id="saveZoneBtn">Speichern</button>
-            </div>
+      <!-- ═══ PRODUCTS ═══ -->
+      <div class="tab-pane" id="tab-products">
+        <div class="pane-header">
+          <div><h2>Produkte</h2><p>Speisekarte verwalten</p></div>
+          <button class="btn btn-primary" id="addProductBtn"><i class="fas fa-plus"></i> Produkt</button>
         </div>
-    </div>
-
-    <!-- TEMPLATE MODAL -->
-    <div class="modal" id="templateModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3 id="templateModalTitle">Neues Template</h3>
-                <button class="modal-close"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <form id="templateForm">
-                    <input type="hidden" id="templateId">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" id="templateName" placeholder="Template-Name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Beschreibung</label>
-                        <input type="text" id="templateDescription" placeholder="Kurze Beschreibung...">
-                    </div>
-                    <div class="form-group">
-                        <label>Zonen</label>
-                        <div id="templateZoneEditor"></div>
-                        <button type="button" class="btn btn-outline btn-sm" onclick="admin.addTemplateZone()" style="margin-top:8px;">
-                            <i class="fas fa-plus"></i> Zone hinzufügen
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline modal-cancel">Abbrechen</button>
-                <button class="btn btn-primary" id="saveTemplateBtn">Speichern</button>
-            </div>
+        <div class="toolbar">
+          <div class="search-box"><i class="fas fa-search"></i><input type="text" id="productSearch" placeholder="Suchen…"></div>
+          <select class="select-sm" id="categoryFilter">
+            <option value="">Alle Kategorien</option>
+            <option value="burger">Burger</option>
+            <option value="sides">Beilagen</option>
+            <option value="drinks">Getränke</option>
+            <option value="dessert">Desserts</option>
+          </select>
         </div>
-    </div>
+        <div class="products-grid" id="productsGrid"></div>
+      </div>
 
-    <!-- DISPLAY MODAL -->
-    <div class="modal" id="displayModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="displayModalTitle">Neues Display</h3>
-                <button class="modal-close"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <form id="displayForm">
-                    <input type="hidden" id="displayId">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" id="displayName" placeholder="Display-Name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>URL-Slug</label>
-                        <input type="text" id="displaySlug" placeholder="z.B. hauptdisplay" required>
-                        <small style="color:var(--text-muted);font-size:11px;">Wird zu: /display/dein-slug</small>
-                    </div>
-                    <div class="form-group">
-                        <label>Beschreibung</label>
-                        <input type="text" id="displayDescription" placeholder="Optional...">
-                    </div>
-                    <div class="form-group">
-                        <label>Template</label>
-                        <select id="displayTemplate"></select>
-                    </div>
-                    <div class="form-group">
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="displayActive" checked>
-                            <span class="toggle-slider"></span>
-                            <span class="toggle-label">Aktiv</span>
-                        </label>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline modal-cancel">Abbrechen</button>
-                <button class="btn btn-primary" id="saveDisplayBtn">Speichern</button>
-            </div>
+      <!-- ═══ MEDIA ═══ -->
+      <div class="tab-pane" id="tab-media">
+        <div class="pane-header">
+          <div><h2>Mediathek</h2><p>Bilder & Videos verwalten</p></div>
+          <label class="btn btn-primary"><i class="fas fa-upload"></i> Hochladen<input type="file" id="mediaUpload" accept="image/*,video/*" multiple style="display:none"></label>
         </div>
-    </div>
+        <div class="media-grid" id="mediaGrid"></div>
+      </div>
 
-    <!-- SCHEDULE MODAL -->
-    <div class="modal" id="scheduleModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="scheduleModalTitle">Neuer Zeitplan</h3>
-                <button class="modal-close"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <form id="scheduleForm">
-                    <input type="hidden" id="scheduleId">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Name</label>
-                            <input type="text" id="scheduleName" placeholder="z.B. Frühstück" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Badge</label>
-                            <input type="text" id="scheduleBadge" placeholder="z.B. Morgens">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Beschreibung</label>
-                        <input type="text" id="scheduleDescription" placeholder="Kurze Beschreibung...">
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Startzeit</label>
-                            <input type="time" id="scheduleStart" value="06:00">
-                        </div>
-                        <div class="form-group">
-                            <label>Endzeit</label>
-                            <input type="time" id="scheduleEnd" value="11:00">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Wochentage</label>
-                        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="0"> So</label>
-                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="1" checked> Mo</label>
-                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="2" checked> Di</label>
-                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="3" checked> Mi</label>
-                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="4" checked> Do</label>
-                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="5" checked> Fr</label>
-                            <label class="checkbox-label"><input type="checkbox" class="schedule-day-check" value="6"> Sa</label>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Template</label>
-                            <select id="scheduleTemplate">
-                                <option value="split">Split Screen</option>
-                                <option value="fullscreen-menu">Full Screen Menü</option>
-                                <option value="menu-video">Menü + Video</option>
-                                <option value="triple">Triple Column</option>
-                                <option value="promo-focus">Promo Fokus</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Theme</label>
-                            <select id="scheduleTheme">
-                                <option value="dark">Dark</option>
-                                <option value="light">Light</option>
-                                <option value="burger">Burger</option>
-                                <option value="coffee">Coffee</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Ticker Text</label>
-                        <textarea id="scheduleTicker" rows="2" placeholder="Ticker-Text für diesen Zeitplan..."></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline modal-cancel">Abbrechen</button>
-                <button class="btn btn-primary" id="saveScheduleBtn">Speichern</button>
-            </div>
+      <!-- ═══ DISPLAYS ═══ -->
+      <div class="tab-pane" id="tab-displays">
+        <div class="pane-header">
+          <div><h2>Displays</h2><p>Alle Bildschirme verwalten</p></div>
+          <button class="btn btn-primary" id="addDisplayBtn"><i class="fas fa-plus"></i> Display</button>
         </div>
+        <div class="displays-grid" id="displaysGrid"></div>
+      </div>
+
+      <!-- ═══ TEMPLATES ═══ -->
+      <div class="tab-pane" id="tab-templates">
+        <div class="pane-header">
+          <div><h2>Templates</h2><p>Layout-Vorlagen verwalten</p></div>
+          <button class="btn btn-primary" id="addTemplateBtn"><i class="fas fa-plus"></i> Template</button>
+        </div>
+        <div class="templates-grid" id="templatesGrid"></div>
+      </div>
+
+      <!-- ═══ DESIGNER ═══ -->
+      <div class="tab-pane" id="tab-designer">
+        <div class="designer-layout">
+          <div class="designer-sidebar">
+            <div class="designer-tools">
+              <div class="tool-group-label">Werkzeuge</div>
+              <button class="tool-btn active" id="toolSelect"><i class="fas fa-arrow-pointer"></i> Auswählen</button>
+              <button class="tool-btn" id="toolAddMenu"><i class="fas fa-utensils"></i> Menü Zone</button>
+              <button class="tool-btn" id="toolAddMedia"><i class="fas fa-image"></i> Media Zone</button>
+              <button class="tool-btn" id="toolAddTicker"><i class="fas fa-scroll"></i> Ticker Zone</button>
+              <button class="tool-btn" id="toolAddText"><i class="fas fa-font"></i> Text Zone</button>
+              <button class="tool-btn" id="toolAddClock"><i class="fas fa-clock"></i> Uhr Zone</button>
+            </div>
+            <div class="designer-tools" style="margin-top:12px;">
+              <div class="tool-group-label">Raster</div>
+              <label class="toggle-row"><input type="checkbox" id="showGrid" checked><span>Raster anzeigen</span></label>
+              <label class="toggle-row"><input type="checkbox" id="snapGrid" checked><span>Einrasten</span></label>
+              <div class="form-group" style="margin-top:8px;"><label style="font-size:12px;color:var(--text-muted)">Rastergröße</label><input type="number" id="gridSize" value="10" min="1" max="50" class="input-sm"></div>
+            </div>
+            <div class="designer-tools" style="margin-top:12px;">
+              <div class="tool-group-label">Templates</div>
+              <div id="templateButtons" class="template-pills"></div>
+            </div>
+            <div class="properties-panel" id="propertiesPanel">
+              <div class="tool-group-label">Eigenschaften</div>
+              <p class="no-selection">Keine Zone ausgewählt</p>
+            </div>
+          </div>
+          <div class="designer-main">
+            <div class="designer-topbar">
+              <div class="designer-status"><i class="fas fa-mouse-pointer"></i> <span id="selectedZone">Keine Zone</span></div>
+              <div class="designer-zoom">
+                <button class="btn-icon" id="zoomOut"><i class="fas fa-minus"></i></button>
+                <span id="zoomLevel">100%</span>
+                <button class="btn-icon" id="zoomIn"><i class="fas fa-plus"></i></button>
+                <button class="btn-icon" id="zoomFit"><i class="fas fa-compress-arrows-alt"></i></button>
+              </div>
+              <div class="designer-actions">
+                <button class="btn-icon" id="undoBtn" title="Rückgängig"><i class="fas fa-rotate-left"></i></button>
+                <button class="btn-icon" id="redoBtn" title="Wiederholen"><i class="fas fa-rotate-right"></i></button>
+                <button class="btn btn-primary btn-sm" id="saveLayoutBtn"><i class="fas fa-floppy-disk"></i> Speichern</button>
+              </div>
+            </div>
+            <div class="designer-canvas-wrap">
+              <div class="designer-canvas show-grid" id="designerCanvas"></div>
+            </div>
+            <div class="designer-info-bar">
+              <span id="canvasSize">1920 × 1080</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ PLAYLISTS ═══ -->
+      <div class="tab-pane" id="tab-playlists">
+        <div class="pane-header">
+          <div><h2>Playlisten</h2><p>Inhaltsreihenfolge für Displays & Zonen</p></div>
+          <button class="btn btn-primary" id="addPlaylistBtn"><i class="fas fa-plus"></i> Playlist</button>
+        </div>
+        <div class="playlists-grid" id="playlistsGrid"></div>
+      </div>
+
+      <!-- ═══ REMOTE CONTROL ═══ -->
+      <div class="tab-pane" id="tab-remote">
+        <div class="pane-header">
+          <div><h2>Fernsteuerung</h2><p>Alle Displays zentral steuern</p></div>
+        </div>
+        <div class="remote-layout">
+          <div class="remote-broadcast">
+            <h3><i class="fas fa-satellite-dish"></i> Broadcast — Alle Displays</h3>
+            <div class="remote-actions">
+              <button class="remote-btn" onclick="admin.remoteCommand('all','reload')"><i class="fas fa-rotate"></i> Alle neu laden</button>
+              <button class="remote-btn" onclick="admin.remoteCommand('all','next_template')"><i class="fas fa-forward-step"></i> Nächstes Template</button>
+              <button class="remote-btn danger" onclick="admin.remoteCommand('all','blackout')"><i class="fas fa-moon"></i> Blackout</button>
+              <button class="remote-btn" onclick="admin.remoteCommand('all','wake')"><i class="fas fa-sun"></i> Aufwecken</button>
+            </div>
+          </div>
+          <div class="remote-displays" id="remoteDisplaysList"></div>
+        </div>
+      </div>
+
+      <!-- ═══ SCHEDULES ═══ -->
+      <div class="tab-pane" id="tab-schedules">
+        <div class="pane-header">
+          <div><h2>Zeitpläne</h2><p>Zeitgesteuerte Inhaltsumschaltung</p></div>
+          <button class="btn btn-primary" id="addScheduleBtn"><i class="fas fa-plus"></i> Zeitplan</button>
+        </div>
+        <div class="schedules-list" id="schedulesList"></div>
+      </div>
+
+      <!-- ═══ ANALYTICS ═══ -->
+      <div class="tab-pane" id="tab-analytics">
+        <div class="pane-header">
+          <div><h2>Analytics</h2><p>Aufrufstatistiken & Produktranking</p></div>
+          <button class="btn btn-ghost btn-sm" onclick="admin.resetAnalytics()"><i class="fas fa-trash"></i> Zurücksetzen</button>
+        </div>
+        <div class="analytics-grid">
+          <div class="analytics-panel">
+            <h3><i class="fas fa-trophy"></i> Top Produkte</h3>
+            <div id="analyticsProductRanking"></div>
+          </div>
+          <div class="analytics-panel">
+            <h3><i class="fas fa-calendar-week"></i> Letzte 7 Tage</h3>
+            <div id="analytics7Days" class="chart-container"></div>
+          </div>
+          <div class="analytics-panel">
+            <h3><i class="fas fa-clock"></i> Heute stündlich</h3>
+            <div id="analyticsHourly" class="chart-container"></div>
+          </div>
+          <div class="analytics-panel">
+            <h3><i class="fas fa-desktop"></i> Display-Aufrufe</h3>
+            <div id="analyticsDisplays"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ FEATURES ═══ -->
+      <div class="tab-pane" id="tab-features">
+        <div class="pane-header">
+          <div><h2>Features</h2><p>Wetter, QR-Codes, Sprachen & Animationen</p></div>
+          <button class="btn btn-primary" id="saveFeaturesBtn"><i class="fas fa-floppy-disk"></i> Speichern</button>
+        </div>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-cloud-sun"></i></div>
+            <h3>Wetter-Integration</h3>
+            <div id="weatherSettings"></div>
+            <button class="btn btn-ghost btn-sm mt-8" onclick="admin.testWeather()"><i class="fas fa-vial"></i> Testen</button>
+            <div id="weatherTestResult" class="test-result"></div>
+          </div>
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-qrcode"></i></div>
+            <h3>QR-Codes</h3>
+            <div id="qrSettings"></div>
+          </div>
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-language"></i></div>
+            <h3>Mehrsprachigkeit</h3>
+            <div id="languageSettings"></div>
+          </div>
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
+            <h3>Animationen</h3>
+            <div id="animationSettings"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ SETTINGS ═══ -->
+      <div class="tab-pane" id="tab-settings">
+        <div class="pane-header">
+          <div><h2>Einstellungen</h2><p>System konfigurieren</p></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost" id="resetSettingsBtn"><i class="fas fa-rotate-left"></i> Zurücksetzen</button>
+            <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-floppy-disk"></i> Speichern</button>
+          </div>
+        </div>
+        <div class="settings-grid">
+
+          <!-- Theme -->
+          <div class="settings-card settings-card--wide">
+            <div class="card-header-icon"><i class="fas fa-palette"></i></div>
+            <h3>Erscheinungsbild & Theme</h3>
+            <div class="setting-row">
+              <label>Theme</label>
+              <div class="theme-picker" id="themePicker">
+                <button class="theme-pill active" data-theme="dark">🌑 Dark</button>
+                <button class="theme-pill" data-theme="light">☀️ Light</button>
+                <button class="theme-pill" data-theme="burger">🍔 Burger</button>
+                <button class="theme-pill" data-theme="coffee">☕ Coffee</button>
+                <button class="theme-pill" data-theme="custom">🎨 Custom</button>
+              </div>
+            </div>
+            <input type="hidden" id="settingTheme" value="dark">
+
+            <!-- Custom Theme Editor -->
+            <div id="customThemeEditor" style="display:none;">
+              <div class="divider"></div>
+              <h4 style="font-size:13px;font-weight:600;margin:12px 0 8px;color:var(--text-muted)">BENUTZERDEFINIERTE FARBEN</h4>
+              <div class="color-grid">
+                <div class="color-row"><label>Hintergrund (primär)</label><input type="color" id="ct-bgPrimary" value="#0a0a0f"><span id="ct-bgPrimary-val">#0a0a0f</span></div>
+                <div class="color-row"><label>Hintergrund (sekundär)</label><input type="color" id="ct-bgSecondary" value="#13131a"><span id="ct-bgSecondary-val">#13131a</span></div>
+                <div class="color-row"><label>Karten-Hintergrund</label><input type="color" id="ct-bgCard" value="#1e1e2e"><span id="ct-bgCard-val">#1e1e2e</span></div>
+                <div class="color-row"><label>Akzentfarbe (primär)</label><input type="color" id="ct-accentPrimary" value="#6c63ff"><span id="ct-accentPrimary-val">#6c63ff</span></div>
+                <div class="color-row"><label>Akzentfarbe (sekundär)</label><input type="color" id="ct-accentSecondary" value="#ff6584"><span id="ct-accentSecondary-val">#ff6584</span></div>
+                <div class="color-row"><label>Text (primär)</label><input type="color" id="ct-textPrimary" value="#ffffff"><span id="ct-textPrimary-val">#ffffff</span></div>
+                <div class="color-row"><label>Text (sekundär)</label><input type="color" id="ct-textSecondary" value="#a0a0b8"><span id="ct-textSecondary-val">#a0a0b8</span></div>
+                <div class="color-row"><label>Preisfarbe</label><input type="color" id="ct-priceColor" value="#FFD700"><span id="ct-priceColor-val">#FFD700</span></div>
+                <div class="color-row"><label>Rahmenfarbe</label><input type="color" id="ct-borderColor" value="#2a2a3e"><span id="ct-borderColor-val">#2a2a3e</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Font -->
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-font"></i></div>
+            <h3>Schriftart</h3>
+            <div class="font-selector" id="fontSelector"></div>
+            <input type="hidden" id="settingFont" value="Inter">
+            <div class="font-preview-box" id="fontPreview">Aa Bb Cc 123</div>
+          </div>
+
+          <!-- Currency -->
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-coins"></i></div>
+            <h3>Währung</h3>
+            <div class="currency-grid" id="currencyPicker"></div>
+            <input type="hidden" id="settingCurrency" value="€">
+            <div class="setting-row mt-12">
+              <label>Position</label>
+              <select id="settingCurrencyPosition">
+                <option value="before">Vor dem Preis (€ 9.90)</option>
+                <option value="after">Nach dem Preis (9.90 €)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- General -->
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-gear"></i></div>
+            <h3>Allgemein</h3>
+            <div class="setting-row">
+              <label>Sprache</label>
+              <select id="settingLanguage">
+                <option value="de">🇩🇪 Deutsch</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="ar">🇸🇦 العربية</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Aktualisierungsrate (Sek.)</label>
+              <input type="number" id="settingRefresh" value="30" min="5" max="300">
+            </div>
+            <div class="setting-row">
+              <label>Auto-Rotation</label>
+              <label class="toggle"><input type="checkbox" id="settingAutoRotate"><span class="toggle-knob"></span></label>
+            </div>
+            <div class="setting-row">
+              <label>Badges anzeigen</label>
+              <label class="toggle"><input type="checkbox" id="settingShowBadges" checked><span class="toggle-knob"></span></label>
+            </div>
+          </div>
+
+          <!-- Ticker -->
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-scroll"></i></div>
+            <h3>Ticker</h3>
+            <div class="setting-row">
+              <label>Ticker aktiv</label>
+              <label class="toggle"><input type="checkbox" id="settingTickerEnabled" checked><span class="toggle-knob"></span></label>
+            </div>
+            <div class="setting-row">
+              <label>Geschwindigkeit <span id="tickerSpeedVal" class="val-badge">50</span></label>
+              <input type="range" id="settingTickerSpeed" value="50" min="10" max="100">
+            </div>
+            <div class="setting-row">
+              <label>Textfarbe</label>
+              <input type="color" id="settingTickerColor" value="#FFD700">
+            </div>
+            <div class="setting-row">
+              <label>Hintergrund</label>
+              <input type="color" id="settingTickerBg" value="#1a1a2e">
+            </div>
+          </div>
+
+          <!-- Resolution -->
+          <div class="settings-card">
+            <div class="card-header-icon"><i class="fas fa-display"></i></div>
+            <h3>Auflösung</h3>
+            <div class="setting-row">
+              <label>Bildschirmauflösung</label>
+              <select id="settingResolution">
+                <option value="1920x1080">1920 × 1080 (Full HD)</option>
+                <option value="3840x2160">3840 × 2160 (4K)</option>
+                <option value="1280x720">1280 × 720 (HD)</option>
+                <option value="1080x1920">1080 × 1920 (Portrait)</option>
+              </select>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══ MODALS ═══ -->
+
+<!-- Product Modal -->
+<div class="modal" id="productModal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="productModalTitle">Neues Produkt</h3>
+      <button class="modal-close"><i class="fas fa-xmark"></i></button>
     </div>
+    <div class="modal-body">
+      <input type="hidden" id="productId">
+      <div class="form-row">
+        <div class="form-group"><label>Name *</label><input type="text" id="productTitle" placeholder="Produktname"></div>
+        <div class="form-group"><label>Preis *</label><input type="text" id="productPrice" placeholder="0.00"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Kategorie</label>
+          <select id="productCategory">
+            <option value="burger">Burger</option><option value="sides">Beilagen</option>
+            <option value="drinks">Getränke</option><option value="dessert">Desserts</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Badge</label>
+          <select id="productBadge">
+            <option value="">Kein Badge</option><option value="Bestseller">Bestseller</option>
+            <option value="Neu">Neu</option><option value="Angebot">Angebot</option><option value="Limitiert">Limitiert</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Bestand</label>
+          <select id="productStock">
+            <option value="available">Verfügbar</option><option value="low">Wenig</option><option value="soldout">Ausverkauft</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Beschreibung</label><textarea id="productDescription" rows="2" placeholder="Optional…"></textarea></div>
+      <div class="form-group">
+        <label>Bild</label>
+        <div class="image-upload-zone" id="productImageUpload">
+          <input type="file" id="productImageFile" accept="image/*" style="display:none">
+          <div class="image-preview" id="productImagePreview"><i class="fas fa-image"></i><span>Klicken oder URL eingeben</span></div>
+          <input type="text" id="productImageUrl" placeholder="Bild-URL…" class="url-input">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost modal-cancel">Abbrechen</button>
+      <button class="btn btn-primary" id="saveProductBtn">Speichern</button>
+    </div>
+  </div>
+</div>
 
-    <!-- TOAST CONTAINER -->
-    <div class="toast-container" id="toastContainer"></div>
+<!-- Display Modal -->
+<div class="modal" id="displayModal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="displayModalTitle">Neues Display</h3>
+      <button class="modal-close"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="displayId">
+      <div class="form-group"><label>Name *</label><input type="text" id="displayName" placeholder="z.B. Hauptdisplay"></div>
+      <div class="form-group">
+        <label>URL-Slug *</label>
+        <input type="text" id="displaySlug" placeholder="z.B. hauptdisplay">
+        <small class="hint">Ergibt: /display/dein-slug</small>
+      </div>
+      <div class="form-group"><label>Beschreibung</label><input type="text" id="displayDescription" placeholder="Optional…"></div>
+      <div class="form-group"><label>Template</label><select id="displayTemplate"></select></div>
+      <div class="form-group"><label>Playlist zuweisen</label><select id="displayPlaylist"><option value="">Keine Playlist</option></select></div>
+      <div class="setting-row">
+        <label>Aktiv</label>
+        <label class="toggle"><input type="checkbox" id="displayActive" checked><span class="toggle-knob"></span></label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost modal-cancel">Abbrechen</button>
+      <button class="btn btn-primary" id="saveDisplayBtn">Speichern</button>
+    </div>
+  </div>
+</div>
 
-    <script src="admin.js"></script>
+<!-- Template Modal -->
+<div class="modal" id="templateModal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-box modal-box--lg">
+    <div class="modal-head">
+      <h3 id="templateModalTitle">Neues Template</h3>
+      <button class="modal-close"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="templateId">
+      <div class="form-group"><label>Name *</label><input type="text" id="templateName" placeholder="Template-Name"></div>
+      <div class="form-group"><label>Beschreibung</label><input type="text" id="templateDescription" placeholder="Kurze Beschreibung…"></div>
+      <div class="form-group">
+        <label>Zones (JSON)</label>
+        <textarea id="templateZonesJson" rows="8" placeholder='[{"id":"zone-menu","type":"menu","x":0,"y":0,"w":100,"h":92,"visible":true,"productIds":[]}]' style="font-family:monospace;font-size:12px;"></textarea>
+        <small class="hint">Oder aktuelles Layout übernehmen:</small>
+        <button type="button" class="btn btn-ghost btn-sm mt-4" onclick="admin.copyCurrentLayoutToTemplate()"><i class="fas fa-copy"></i> Aktuelles Layout übernehmen</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost modal-cancel">Abbrechen</button>
+      <button class="btn btn-primary" id="saveTemplateBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Zone Modal -->
+<div class="modal" id="zoneModal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-box modal-box--lg">
+    <div class="modal-head">
+      <h3 id="zoneModalTitle">Zone bearbeiten</h3>
+      <button class="modal-close"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="zoneId">
+      <div class="form-row">
+        <div class="form-group"><label>Name</label><input type="text" id="zoneName" placeholder="Zonen-Name"></div>
+        <div class="form-group">
+          <label>Typ</label>
+          <select id="zoneType">
+            <option value="menu">Menü</option><option value="media">Media</option>
+            <option value="ticker">Ticker</option><option value="text">Text</option><option value="clock">Uhr</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>X (%)</label><input type="number" id="zoneX" value="10" step="0.1"></div>
+        <div class="form-group"><label>Y (%)</label><input type="number" id="zoneY" value="10" step="0.1"></div>
+        <div class="form-group"><label>Breite (%)</label><input type="number" id="zoneW" value="20" step="0.1"></div>
+        <div class="form-group"><label>Höhe (%)</label><input type="number" id="zoneH" value="20" step="0.1"></div>
+      </div>
+      <label class="toggle-row"><input type="checkbox" id="zoneVisible" checked><span>Sichtbar</span></label>
+
+      <div id="zoneArticlesGroup">
+        <div class="divider"></div>
+        <h4 class="sub-heading"><i class="fas fa-utensils"></i> Produkte</h4>
+        <div class="zone-product-selector" id="zoneProductSelector"></div>
+        <div class="article-style-section">
+          <div class="article-toggle-row">
+            <label class="toggle-chip"><input type="checkbox" id="showImage" checked><span>Bild</span></label>
+            <label class="toggle-chip"><input type="checkbox" id="showTitle" checked><span>Titel</span></label>
+            <label class="toggle-chip"><input type="checkbox" id="showPrice" checked><span>Preis</span></label>
+            <label class="toggle-chip"><input type="checkbox" id="showDescription"><span>Beschreibung</span></label>
+            <label class="toggle-chip"><input type="checkbox" id="showBadge" checked><span>Badge</span></label>
+            <label class="toggle-chip"><input type="checkbox" id="showStock" checked><span>Bestand</span></label>
+          </div>
+          <div class="style-grid">
+            <div class="form-group"><label>Preis-Position</label><select id="pricePosition"><option value="bottom-right">Unten rechts</option><option value="top-right">Oben rechts</option><option value="inline">Inline</option></select></div>
+            <div class="form-group"><label>Preis-Stil</label><select id="priceStyle"><option value="badge-gold">Gold Badge</option><option value="badge-dark">Dark Badge</option><option value="text-plain">Einfacher Text</option><option value="text-bold">Fetter Text</option></select></div>
+            <div class="form-group"><label>Bild-Größe</label><select id="imageSize"><option value="large">Groß</option><option value="medium">Mittel</option><option value="small">Klein</option></select></div>
+            <div class="form-group"><label>Layout</label><select id="cardLayout"><option value="vertical">Vertikal</option><option value="horizontal">Horizontal</option><option value="compact">Kompakt</option></select></div>
+            <div class="form-group"><label>Ausrichtung</label><select id="textAlign"><option value="left">Links</option><option value="center">Zentriert</option><option value="right">Rechts</option></select></div>
+            <div class="form-group"><label>Spalten</label><select id="columnsCount"><option value="auto">Auto</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="zoneMediaGroup" style="display:none">
+        <div class="divider"></div>
+        <div class="form-group"><label>Media URL</label><input type="text" id="zoneMediaSrc" placeholder="/uploads/bild.jpg"></div>
+        <div class="form-group"><label>Typ</label><select id="zoneMediaType"><option value="image">Bild</option><option value="video">Video</option></select></div>
+      </div>
+
+      <div id="zoneTickerGroup" style="display:none">
+        <div class="divider"></div>
+        <div class="form-group"><label>Ticker Text</label><textarea id="zoneTickerText" rows="2" placeholder="🍔 Willkommen!"></textarea></div>
+      </div>
+
+      <div id="zoneTextGroup" style="display:none">
+        <div class="divider"></div>
+        <div class="form-group"><label>Text</label><textarea id="zoneTextContent" rows="2"></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label>Schriftgröße</label><input type="number" id="zoneTextSize" value="24"></div>
+          <div class="form-group"><label>Farbe</label><input type="color" id="zoneTextColor" value="#ffffff"></div>
+          <div class="form-group"><label>Ausrichtung</label><select id="zoneTextAlign"><option value="left">Links</option><option value="center">Zentriert</option><option value="right">Rechts</option></select></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="deleteZoneBtn" style="margin-right:auto"><i class="fas fa-trash"></i> Löschen</button>
+      <button class="btn btn-ghost modal-cancel">Abbrechen</button>
+      <button class="btn btn-primary" id="saveZoneBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal" id="scheduleModal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="scheduleModalTitle">Neuer Zeitplan</h3>
+      <button class="modal-close"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="scheduleId">
+      <div class="form-row">
+        <div class="form-group"><label>Name *</label><input type="text" id="scheduleName" placeholder="z.B. Frühstück"></div>
+        <div class="form-group"><label>Badge</label><input type="text" id="scheduleBadge" placeholder="z.B. Morgens"></div>
+      </div>
+      <div class="form-group"><label>Beschreibung</label><input type="text" id="scheduleDescription" placeholder="Kurze Beschreibung…"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Startzeit</label><input type="time" id="scheduleStart" value="06:00"></div>
+        <div class="form-group"><label>Endzeit</label><input type="time" id="scheduleEnd" value="11:00"></div>
+      </div>
+      <div class="form-group">
+        <label>Wochentage</label>
+        <div class="day-picker">
+          <label class="day-btn"><input type="checkbox" class="schedule-day-check" value="1"><span>Mo</span></label>
+          <label class="day-btn"><input type="checkbox" class="schedule-day-check" value="2"><span>Di</span></label>
+          <label class="day-btn"><input type="checkbox" class="schedule-day-check" value="3"><span>Mi</span></label>
+          <label class="day-btn"><input type="checkbox" class="schedule-day-check" value="4"><span>Do</span></label>
+          <label class="day-btn"><input type="checkbox" class="schedule-day-check" value="5"><span>Fr</span></label>
+          <label class="day-btn"><input type="checkbox" class="schedule-day-check" value="6"><span>Sa</span></label>
+          <label class="day-btn"><input type="checkbox" class="schedule-day-check" value="0"><span>So</span></label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Template</label><select id="scheduleTemplate"></select></div>
+        <div class="form-group"><label>Theme</label><select id="scheduleTheme"><option value="dark">Dark</option><option value="light">Light</option><option value="burger">Burger</option><option value="coffee">Coffee</option></select></div>
+      </div>
+      <div class="form-group"><label>Ticker Text</label><textarea id="scheduleTicker" rows="2" placeholder="Ticker-Text für diesen Zeitplan…"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost modal-cancel">Abbrechen</button>
+      <button class="btn btn-primary" id="saveScheduleBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Playlist Modal -->
+<div class="modal" id="playlistModal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-box modal-box--lg">
+    <div class="modal-head">
+      <h3 id="playlistModalTitle">Neue Playlist</h3>
+      <button class="modal-close"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="playlistId">
+      <div class="form-row">
+        <div class="form-group"><label>Name *</label><input type="text" id="playlistName" placeholder="Playlist-Name"></div>
+        <div class="form-group">
+          <label>Typ</label>
+          <select id="playlistType" onchange="admin.updatePlaylistTypeUI()">
+            <option value="display">Display-Playlist (ganzer Bildschirm)</option>
+            <option value="zone">Zonen-Playlist (einzelne Zone)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Beschreibung</label><input type="text" id="playlistDescription" placeholder="Optional…"></div>
+      <div class="setting-row">
+        <label>Loop (endlos wiederholen)</label>
+        <label class="toggle"><input type="checkbox" id="playlistLoop" checked><span class="toggle-knob"></span></label>
+      </div>
+      <div class="setting-row">
+        <label>Shuffle (zufällige Reihenfolge)</label>
+        <label class="toggle"><input type="checkbox" id="playlistShuffle"><span class="toggle-knob"></span></label>
+      </div>
+      <div class="divider"></div>
+      <h4 class="sub-heading"><i class="fas fa-list"></i> Elemente</h4>
+      <div id="playlistItemsEditor" class="playlist-items-editor"></div>
+      <button type="button" class="btn btn-ghost btn-sm mt-8" onclick="admin.addPlaylistItem()"><i class="fas fa-plus"></i> Element hinzufügen</button>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost modal-cancel">Abbrechen</button>
+      <button class="btn btn-primary" id="savePlaylistBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="admin.js"></script>
 </body>
 </html>
